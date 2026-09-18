@@ -1,0 +1,162 @@
+.card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.titleArea {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.externalBtn {
+  color: var(--color-text-muted);
+  transition: all var(--transition-fast);
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.externalBtn:hover {
+  color: var(--color-dark);
+  background-color: var(--color-bg-subtle);
+}
+
+/* Vertical Bar Chart */
+.chartContainer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 180px;
+  padding: 10px 12px 6px;
+}
+
+.stageColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 8px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.percentLabel {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--color-text-heading);
+  letter-spacing: -0.3px;
+}
+
+.barWrapper {
+  width: 28px;
+  height: 120px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.verticalBar {
+  width: 100%;
+  border-radius: 6px;
+  transition: height 0.3s ease, transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.stageColumn:hover .verticalBar {
+  transform: scaleY(1.03);
+  background-color: var(--color-primary) !important;
+}
+
+.stageLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Category Segment Tabs */
+.segmentTabs {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-bg-subtle);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+  gap: 4px;
+}
+
+.segmentBtn {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.segmentBtn:hover {
+  color: var(--color-dark);
+}
+
+.segmentBtn.activeSegment {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  box-shadow: 0 2px 8px rgba(253, 55, 6, 0.3);
+}
+
+/* CTA Button */
+.exportBtn {
+  width: 100%;
+  background-color: var(--color-dark);
+  color: var(--color-white);
+  padding: 13px 18px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all var(--transition-fast);
+  box-shadow: 0 4px 14px rgba(34, 32, 38, 0.25);
+}
+
+.exportBtn:hover {
+  background-color: #16151A;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(34, 32, 38, 0.35);
+}
+
+.exportBtn:active {
+  transform: translateY(0);
+}
+
+.exportIcon {
+  flex-shrink: 0;
+}

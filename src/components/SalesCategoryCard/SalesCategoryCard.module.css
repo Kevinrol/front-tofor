@@ -1,0 +1,139 @@
+.card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.titleArea {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.externalBtn {
+  color: var(--color-text-muted);
+  transition: all var(--transition-fast);
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.externalBtn:hover {
+  color: var(--color-dark);
+  background-color: var(--color-bg-subtle);
+}
+
+/* Polar Chart Canvas */
+.polarChartContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 220px;
+  margin: 10px 0 16px;
+}
+
+.polarSvg {
+  width: 240px;
+  height: 240px;
+  overflow: visible;
+}
+
+.bgSlice {
+  stroke: var(--color-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  cursor: pointer;
+}
+
+.fgSlice {
+  stroke: var(--color-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  cursor: pointer;
+}
+
+/* Legend items in a row */
+.legendWrapper {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 18px;
+  margin-bottom: 24px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.legendItem:hover {
+  color: var(--color-dark);
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Period Tabs */
+.periodTabs {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+  padding: 5px;
+  gap: 5px;
+}
+
+.tabBtn {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-body);
+  transition: all var(--transition-fast);
+}
+
+.tabBtn:hover {
+  color: var(--color-dark);
+}
+
+.tabBtn.activeTab {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  box-shadow: 0 4px 12px rgba(253, 55, 6, 0.25);
+  font-weight: 600;
+}

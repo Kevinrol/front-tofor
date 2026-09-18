@@ -1,0 +1,112 @@
+:root {
+  /* User requested palette */
+  --color-primary: #FD3706;
+  --color-primary-rgb: 253, 55, 6;
+  --color-primary-light: rgba(253, 55, 6, 0.12);
+  --color-primary-glow: rgba(253, 55, 6, 0.25);
+  --color-primary-hover: #E32E00;
+
+  --color-border: #DBDBDB;
+  --color-border-subtle: #EBEBEB;
+  --color-border-light: #F0F0F2;
+
+  --color-dark: #222026;
+  --color-dark-rgb: 34, 32, 38;
+  --color-dark-surface: #1B191E;
+  --color-dark-card: #222026;
+
+  --color-white: #FFFFFF;
+  --color-surface: #FFFFFF;
+
+  /* App Backgrounds */
+  --color-bg-viewport: #E4E7EB;
+  --color-bg-app: #F7F8FA;
+  --color-bg-subtle: #F3F4F7;
+  --color-bg-hover: #EEF0F4;
+
+  /* Typography Colors */
+  --color-text-heading: #18171C;
+  --color-text-body: #3F434E;
+  --color-text-secondary: #747986;
+  --color-text-muted: #9DA2AE;
+  --color-text-placeholder: #B1B5C0;
+
+  /* Semantic Status */
+  --color-success: #059669;
+  --color-success-bg: #E6F7ED;
+  --color-warning: #D97706;
+  --color-warning-bg: #FEF3C7;
+  --color-danger: #EF4444;
+  --color-danger-bg: #FEE2E2;
+
+  /* Geometry & Shadows */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 32px;
+  --radius-pill: 9999px;
+
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-hover: 0 8px 24px rgba(34, 32, 38, 0.08), 0 2px 6px rgba(34, 32, 38, 0.04);
+  --shadow-mockup: 0 25px 60px -15px rgba(26, 28, 35, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.12);
+  --shadow-tooltip: 0 12px 28px -6px rgba(20, 22, 28, 0.35);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --transition-fast: 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  min-height: 100%;
+  width: 100%;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-viewport);
+  color: var(--color-text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.45;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  outline: none;
+}
+
+input {
+  font-family: inherit;
+  outline: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Custom modern scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(180, 185, 195, 0.45);
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 145, 160, 0.7);
+}

@@ -1,0 +1,265 @@
+.chartCard {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.titleArea {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.subtitle {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-body);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendDotStock {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: repeating-linear-gradient(
+    45deg,
+    #A0AEC0,
+    #A0AEC0 2px,
+    #CBD5E1 2px,
+    #CBD5E1 5px
+  );
+}
+
+.legendDotSales {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--color-dark);
+}
+
+.settingsBtn {
+  color: var(--color-text-secondary);
+  padding: 6px;
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.settingsBtn:hover {
+  color: var(--color-dark);
+  background-color: var(--color-bg-subtle);
+}
+
+/* Chart Canvas / Columns */
+.chartContainer {
+  position: relative;
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 30px;
+  margin-top: 10px;
+}
+
+/* Y-Axis Guidelines */
+.guideLine75 {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 145px;
+  border-bottom: 1px dashed var(--color-border);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.guideLabel {
+  position: absolute;
+  left: 36%;
+  transform: translateY(-50%);
+  background-color: var(--color-surface);
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.monthColumn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.barsStack {
+  width: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+/* Top hatched bar: Entradas de stock */
+.barStock {
+  width: 100%;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    45deg,
+    #B3BDCA,
+    #B3BDCA 2px,
+    #CAD2DE 2px,
+    #CAD2DE 5px
+  );
+  transition: all var(--transition-fast);
+}
+
+/* Bottom solid dark bar: Ventas Totales */
+.barSales {
+  width: 100%;
+  border-radius: 4px;
+  background-color: var(--color-dark);
+  transition: all var(--transition-fast);
+}
+
+.monthColumn:hover .barSales {
+  background-color: var(--color-primary);
+}
+
+/* Month labels at bottom */
+.monthLabel {
+  position: absolute;
+  bottom: 4px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+
+.monthLabelActive {
+  font-weight: 800;
+  color: var(--color-text-heading);
+}
+
+/* Orange pill badge on Jun */
+.badgeJun {
+  position: absolute;
+  bottom: 24px;
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(253, 55, 6, 0.4);
+}
+
+/* Campaign Tooltip Popup */
+.campaignTooltip {
+  position: absolute;
+  top: 15px;
+  left: 42%;
+  transform: translateX(-50%);
+  background-color: #19181D;
+  color: var(--color-white);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-tooltip);
+  min-width: 160px;
+  z-index: 10;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.tooltipHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tooltipTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-white);
+}
+
+.tooltipDotOrange {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.tooltipBody {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tooltipDotSlate {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #8C94A0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, 4px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 900px) {
+  .chartContainer {
+    overflow-x: auto;
+  }
+}
