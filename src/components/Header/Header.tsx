@@ -8,11 +8,11 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange }) => {
-  const [currency, setCurrency] = useState<'EUR' | 'USD' | 'MXN'>('EUR');
+  const [currency, setCurrency] = useState<'BOL' | 'USD' | 'ARG'>('BOL');
   const [showNotifications, setShowNotifications] = useState(false);
 
   const toggleCurrency = () => {
-    setCurrency((prev) => (prev === 'EUR' ? 'USD' : prev === 'USD' ? 'MXN' : 'EUR'));
+    setCurrency((prev) => (prev === 'BOL' ? 'USD' : prev === 'USD' ? 'ARG' : 'BOL'));
   };
 
   return (
@@ -33,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange }) =
           title="Cambiar divisa"
         >
           <span className={styles.currencyIcon}>€</span>
-          <span>{currency} ({currency === 'EUR' ? '€' : currency === 'USD' ? '$' : '$'})</span>
+          <span>{currency} ({currency === 'BOL' ? 'Bs' : currency === 'USD' ? '$' : '$'})</span>
           <ChevronDown size={14} />
         </button>
 

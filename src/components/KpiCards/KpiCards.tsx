@@ -114,11 +114,11 @@ export const KpiCards: React.FC = () => {
           <div className={styles.genderLegendOrange}>
             <div className={styles.legendItemOrange}>
               <span className={styles.legendDotWhite}></span>
-              <span>Men</span>
+              <span>Mayoristas</span>
             </div>
             <div className={styles.legendItemOrange}>
               <span className={styles.legendDotDark}></span>
-              <span>Women</span>
+              <span>Minoristas</span>
             </div>
           </div>
         </div>

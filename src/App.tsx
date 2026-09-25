@@ -1,9 +1,9 @@
 import React from 'react';
-import { Dashboard } from './components/Dashboard/Dashboard';
+import { SupplierRegistration } from './components/SupplierRegistration/SupplierRegistration';
 
 export const App: React.FC = () => {
   return (
-    <Dashboard />
+    <SupplierRegistration />
   );
 };
 
