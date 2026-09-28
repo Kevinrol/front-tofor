@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Bell, ChevronDown } from 'lucide-react';
-import styles from './Header.module.css';
+import styles from './Encabezado.module.css';
 
 interface HeaderProps {
   searchQuery: string;

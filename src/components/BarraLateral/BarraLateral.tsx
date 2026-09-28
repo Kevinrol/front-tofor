@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   LayoutGrid, 
   Box, 
@@ -7,26 +7,33 @@ import {
   BarChart2, 
   Inbox, 
   Settings, 
-  LogOut 
+  LogOut,
+  Truck
 } from 'lucide-react';
-import styles from './Sidebar.module.css';
+import styles from './BarraLateral.module.css';
+
+export type NavTab = 'dashboard' | 'inventory' | 'sales' | 'catalog' | 'suppliers' | 'analytics' | 'inbox';
 
 interface NavOption {
-  id: string;
+  id: NavTab;
   label: string;
   icon: React.ReactNode;
 }
 
-export const Sidebar: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+interface SidebarProps {
+  activeTab: NavTab;
+  onTabChange: (tab: NavTab) => void;
+}
 
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const navItems: NavOption[] = [
-    { id: 'dashboard', label: 'Panel Principal', icon: <LayoutGrid size={20} /> },
-    { id: 'inventory', label: 'Almacén & Stock', icon: <Box size={20} /> },
-    { id: 'sales', label: 'Ventas Mostrador', icon: <ShoppingBag size={20} /> },
-    { id: 'catalog', label: 'Catálogo Escolar', icon: <BookOpen size={20} /> },
-    { id: 'analytics', label: 'Reportes & Métricas', icon: <BarChart2 size={20} /> },
-    { id: 'inbox', label: 'Entradas & Envíos', icon: <Inbox size={20} /> },
+    { id: 'dashboard',  label: 'Panel Principal',    icon: <LayoutGrid size={20} /> },
+    { id: 'inventory',  label: 'Almacén & Stock',    icon: <Box size={20} /> },
+    { id: 'sales',      label: 'Ventas Mostrador',   icon: <ShoppingBag size={20} /> },
+    { id: 'catalog',    label: 'Catálogo Escolar',   icon: <BookOpen size={20} /> },
+    { id: 'suppliers',  label: 'Proveedores',        icon: <Truck size={20} /> },
+    { id: 'analytics',  label: 'Reportes & Métricas',icon: <BarChart2 size={20} /> },
+    { id: 'inbox',      label: 'Entradas & Envíos',  icon: <Inbox size={20} /> },
   ];
 
   return (
@@ -45,7 +52,7 @@ export const Sidebar: React.FC = () => {
               <button
                 key={item.id}
                 className={`${styles.navItem} ${isActive ? styles.active : ''}`}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => onTabChange(item.id)}
                 title={item.label}
                 aria-label={item.label}
                 aria-current={isActive ? 'page' : undefined}

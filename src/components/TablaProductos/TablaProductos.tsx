@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { ProductItem } from '../../types';
-import styles from './ProductTable.module.css';
+import styles from './TablaProductos.module.css';
 
 interface ProductTableProps {
   products: ProductItem[];

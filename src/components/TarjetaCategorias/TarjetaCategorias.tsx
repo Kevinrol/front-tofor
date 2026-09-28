@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { CATEGORY_SHARES } from '../../data/mockData';
-import styles from './SalesCategoryCard.module.css';
+import styles from './TarjetaCategorias.module.css';
 
 export const SalesCategoryCard: React.FC = () => {
-  const [activePeriod, setActivePeriod] = useState<'year' | 'weekly' | 'monthly'>('monthly');
+  const [_activePeriod, setActivePeriod] = useState<'year' | 'weekly' | 'monthly'>('monthly');
   const [highlightedCat, setHighlightedCat] = useState<string | null>(null);
 
   // Math for Polar Area Chart
@@ -57,7 +57,7 @@ export const SalesCategoryCard: React.FC = () => {
     
     // Pill position
     const midAngle = startAngle + sliceAngle / 2;
-    const labelPos = getCoords(midAngle, normalizedRadius);
+    // label position computed via pillPos below
     
     // Ensure labels don't get cut off on the right/left
     // Slightly adjust radius for pills to sit half-inside, half-outside

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Tablet, Maximize2, Palette } from 'lucide-react';
-import styles from './TabletMockup.module.css';
+import styles from './MarcoTablet.module.css';
 
 interface TabletMockupProps {
   children: React.ReactNode;

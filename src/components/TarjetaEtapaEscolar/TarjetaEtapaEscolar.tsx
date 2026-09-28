@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowUpRight, Upload } from 'lucide-react';
 import { SCHOOL_STAGES } from '../../data/mockData';
-import styles from './EducationStageCard.module.css';
+import styles from './TarjetaEtapaEscolar.module.css';
 
 export const EducationStageCard: React.FC = () => {
   const [activeSegment, setActiveSegment] = useState<'historico' | 'colegios' | 'familias'>('historico');

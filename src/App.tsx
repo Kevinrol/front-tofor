@@ -1,9 +1,12 @@
 import React from 'react';
-import { SupplierRegistration } from './components/SupplierRegistration/SupplierRegistration';
+import { AuthProvider } from './context/ContextoAuth';
+import LayoutPrincipal from './layouts/LayoutPrincipal';
 
 export const App: React.FC = () => {
   return (
-    <SupplierRegistration />
+    <AuthProvider>
+      <LayoutPrincipal />
+    </AuthProvider>
   );
 };
 

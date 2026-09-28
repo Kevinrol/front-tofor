@@ -1,24 +1,18 @@
-import React, { useState } from 'react';
-import { Sidebar } from '../Sidebar/Sidebar';
-import { Header } from '../Header/Header';
+import React from 'react';
+// @deprecated — use pages/Suppliers/Proveedores + layouts/LayoutPrincipal instead
 import { 
   Building2, IdCard, Shapes, Check, X, Save, 
   Store, Award, ClipboardList, TrendingUp, 
   Contact, Phone, MapPin, Info, Clock, RotateCcw,
   FileText, ShoppingCart
 } from 'lucide-react';
-import styles from './SupplierRegistration.module.css';
+import styles from './RegistroProveedores.module.css';
 
 export const SupplierRegistration: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
 
   return (
     <div className={styles.container}>
-      <Sidebar />
-
       <div className={styles.mainWrapper}>
-        <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-
         <main className={styles.scrollArea}>
           {/* Header Section */}
           <div className={styles.pageHeader}>

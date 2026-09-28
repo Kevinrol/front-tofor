@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SlidersHorizontal, ArrowUpRight } from 'lucide-react';
 import { WEEKLY_REVENUE_DAYS } from '../../data/mockData';
-import styles from './KpiCards.module.css';
+import styles from './TarjetasKpi.module.css';
 
 export const KpiCards: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<string>('Fri');

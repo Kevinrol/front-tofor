@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Settings } from 'lucide-react';
 import { MONTHLY_STOCK_SALES } from '../../data/mockData';
-import styles from './StockMovementChart.module.css';
+import styles from './GraficoStock.module.css';
 
 export const StockMovementChart: React.FC = () => {
   const [hoveredMonth, setHoveredMonth] = useState<string | null>('Jun');
