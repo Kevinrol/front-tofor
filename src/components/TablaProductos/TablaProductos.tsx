@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { ProductItem } from '../../types';
+import { Paginador } from '../Paginador/Paginador';
 import styles from './TablaProductos.module.css';
 
 interface ProductTableProps {
@@ -8,6 +9,17 @@ interface ProductTableProps {
 }
 
 export const ProductTable: React.FC<ProductTableProps> = ({ products }) => {
+  const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(5);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [products]);
+
+  const totalPaginas = Math.max(1, Math.ceil(products.length / porPagina));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visibles = products.slice((paginaActual - 1) * porPagina, paginaActual * porPagina);
+
   const renderProductIcon = (iconType: ProductItem['iconType']) => {
     switch (iconType) {
       case 'notebook':
@@ -102,7 +114,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({ products }) => {
             </tr>
           </thead>
           <tbody>
-            {products.map((item) => (
+            {visibles.map((item) => (
               <tr key={item.id}>
                 {/* Artículo */}
                 <td>
@@ -185,6 +197,18 @@ export const ProductTable: React.FC<ProductTableProps> = ({ products }) => {
           </tbody>
         </table>
       </div>
+
+      <Paginador
+        total={products.length}
+        pagina={paginaActual}
+        onChange={setPagina}
+        porPagina={porPagina}
+        onPorPaginaChange={(nuevo) => {
+          setPorPagina(nuevo);
+          setPagina(1);
+        }}
+        etiqueta="productos"
+      />
     </section>
   );
 };

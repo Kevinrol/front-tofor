@@ -6,6 +6,7 @@ import {
   AlertCircle, Loader2, Sparkles, Filter
 } from 'lucide-react';
 import styles from './Proveedores.module.css';
+import { Paginador } from '../../components/Paginador/Paginador';
 import { proveedoresService, Proveedor, Marca, LineaProducto } from '../../services/proveedores.service';
 
 interface ToastState {
@@ -44,6 +45,8 @@ export const Proveedores: React.FC = () => {
   const [quickSearch, setQuickSearch] = useState('');
   const [directorySearch, setDirectorySearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [paginaDirectorio, setPaginaDirectorio] = useState(1);
+  const [porPaginaDirectorio, setPorPaginaDirectorio] = useState(6);
 
   // Toast Notification State
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -289,6 +292,17 @@ export const Proveedores: React.FC = () => {
       return matchesSearch && matchesStatus;
     });
   }, [proveedoresList, directorySearch, statusFilter]);
+
+  useEffect(() => {
+    setPaginaDirectorio(1);
+  }, [directorySearch, statusFilter]);
+
+  const totalPaginasDirectorio = Math.max(1, Math.ceil(filteredDirectory.length / porPaginaDirectorio));
+  const paginaActualDirectorio = Math.min(paginaDirectorio, totalPaginasDirectorio);
+  const directoryVisibles = filteredDirectory.slice(
+    (paginaActualDirectorio - 1) * porPaginaDirectorio,
+    paginaActualDirectorio * porPaginaDirectorio
+  );
 
   return (
     <main className={styles.scrollArea}>
@@ -910,7 +924,7 @@ export const Proveedores: React.FC = () => {
 
           <div className={styles.directoryGrid}>
             {filteredDirectory.length > 0 ? (
-              filteredDirectory.map((prov, idx) => (
+              directoryVisibles.map((prov, idx) => (
                 <div key={prov.id_proveedor || idx} className={styles.supplierCard}>
                   <div className={styles.supplierCardHeader}>
                     <div className={styles.supplierCardTitleGroup}>
@@ -978,6 +992,28 @@ export const Proveedores: React.FC = () => {
                 </p>
               </div>
             )}
+          </div>
+
+          <div
+            style={{
+              borderRadius: 'var(--radius-md)',
+              overflow: 'hidden',
+              border: '1px solid var(--color-border-subtle)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
+            <Paginador
+              total={filteredDirectory.length}
+              pagina={paginaActualDirectorio}
+              onChange={setPaginaDirectorio}
+              porPagina={porPaginaDirectorio}
+              opcionesPorPagina={[6, 12, 24]}
+              onPorPaginaChange={(nuevo) => {
+                setPorPaginaDirectorio(nuevo);
+                setPaginaDirectorio(1);
+              }}
+              etiqueta="proveedores"
+            />
           </div>
         </section>
       )}

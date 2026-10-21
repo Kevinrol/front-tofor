@@ -3,42 +3,46 @@
  * Uso: import { api } from '../services/api';
  */
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+/**
+ * Ejecuta una petición HTTP y normaliza la respuesta.
+ * En caso de error intenta extraer el mensaje enviado por NestJS.
+ */
+async function request<T>(method: string, endpoint: string, data?: unknown): Promise<T> {
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
+    method,
+    headers: JSON_HEADERS,
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const body = await response.json();
+      if (Array.isArray(body?.message)) detail = body.message.join(', ');
+      else if (typeof body?.message === 'string') detail = body.message;
+    } catch {
+      // La respuesta no contenía JSON; se usa el mensaje genérico.
+    }
+    throw new Error(detail || `${method} ${endpoint} — ${response.status}`);
+  }
+
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
 
 export const api = {
-  get: async <T = unknown>(endpoint: string): Promise<T> => {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) throw new Error(`GET ${endpoint} — ${response.status}`);
-    return response.json() as Promise<T>;
-  },
+  get: <T = unknown>(endpoint: string): Promise<T> => request<T>('GET', endpoint),
 
-  post: async <T = unknown>(endpoint: string, data: unknown): Promise<T> => {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error(`POST ${endpoint} — ${response.status}`);
-    return response.json() as Promise<T>;
-  },
+  post: <T = unknown>(endpoint: string, data: unknown): Promise<T> =>
+    request<T>('POST', endpoint, data),
 
-  put: async <T = unknown>(endpoint: string, data: unknown): Promise<T> => {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error(`PUT ${endpoint} — ${response.status}`);
-    return response.json() as Promise<T>;
-  },
+  put: <T = unknown>(endpoint: string, data: unknown): Promise<T> =>
+    request<T>('PUT', endpoint, data),
 
-  delete: async <T = unknown>(endpoint: string): Promise<T> => {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) throw new Error(`DELETE ${endpoint} — ${response.status}`);
-    return response.json() as Promise<T>;
-  },
+  patch: <T = unknown>(endpoint: string, data: unknown): Promise<T> =>
+    request<T>('PATCH', endpoint, data),
+
+  delete: <T = unknown>(endpoint: string): Promise<T> => request<T>('DELETE', endpoint),
 };

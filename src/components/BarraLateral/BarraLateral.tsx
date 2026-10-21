@@ -3,16 +3,23 @@ import {
   LayoutGrid, 
   Box, 
   ShoppingBag, 
-  BookOpen, 
-  BarChart2, 
-  Inbox, 
+  ShoppingCart,
+  ClipboardList,
+  Users,
   Settings, 
   LogOut,
   Truck
 } from 'lucide-react';
 import styles from './BarraLateral.module.css';
 
-export type NavTab = 'dashboard' | 'inventory' | 'sales' | 'catalog' | 'suppliers' | 'analytics' | 'inbox';
+export type NavTab =
+  | 'dashboard'
+  | 'inventory'
+  | 'sales'
+  | 'purchases'
+  | 'orders'
+  | 'clients'
+  | 'suppliers';
 
 interface NavOption {
   id: NavTab;
@@ -30,10 +37,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     { id: 'dashboard',  label: 'Panel Principal',    icon: <LayoutGrid size={20} /> },
     { id: 'inventory',  label: 'Almacén & Stock',    icon: <Box size={20} /> },
     { id: 'sales',      label: 'Ventas Mostrador',   icon: <ShoppingBag size={20} /> },
-    { id: 'catalog',    label: 'Catálogo Escolar',   icon: <BookOpen size={20} /> },
+    { id: 'purchases',  label: 'Compras a Proveedor',icon: <ShoppingCart size={20} /> },
+    { id: 'orders',     label: 'Pedidos a Proveedor',icon: <ClipboardList size={20} /> },
+    { id: 'clients',    label: 'Clientes',           icon: <Users size={20} /> },
     { id: 'suppliers',  label: 'Proveedores',        icon: <Truck size={20} /> },
-    { id: 'analytics',  label: 'Reportes & Métricas',icon: <BarChart2 size={20} /> },
-    { id: 'inbox',      label: 'Entradas & Envíos',  icon: <Inbox size={20} /> },
   ];
 
   return (
