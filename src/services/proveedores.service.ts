@@ -31,6 +31,10 @@ export const proveedoresService = {
     return api.post<Proveedor>('/proveedores', data);
   },
 
+  updateProveedor: (id: number, data: Omit<Proveedor, 'id_proveedor'>) => {
+    return api.patch<Proveedor>(`/proveedores/${id}`, data);
+  },
+
   getMarcas: () => {
     return api.get<Marca[]>('/marcas');
   },

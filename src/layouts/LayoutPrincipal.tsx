@@ -8,18 +8,29 @@ import { Clientes } from '../pages/clientes/Clientes';
 import { Ventas } from '../pages/ventas/Ventas';
 import { ComprasProveedor } from '../pages/compras/ComprasProveedor';
 import { PedidosProveedor } from '../pages/pedidos/PedidosProveedor';
+import { Vendedores } from '../pages/vendedores/Vendedores';
+import { useContextoAuth } from '../context/ContextoAuth';
 import styles from '../pages/Dashboard/Panel.module.css';
 
 /**
  * LayoutPrincipal — Shell that wraps Sidebar + Header + dynamic page content.
- * Manages navigation state (activeTab) and renders the correct page.
+ * Manages navigation state (activeTab) and renders the correct page according to user role.
  */
 export const LayoutPrincipal: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  const { esAdmin } = useContextoAuth();
+  const [activeTab, setActiveTab] = useState<NavTab>(() =>
+    esAdmin ? 'dashboard' : 'sales',
+  );
   const [searchQuery, setSearchQuery] = useState('');
 
+  const tabEfectiva: NavTab = esAdmin ? activeTab : 'sales';
+
   const renderPage = () => {
-    switch (activeTab) {
+    if (!esAdmin) {
+      return <Ventas />;
+    }
+
+    switch (tabEfectiva) {
       case 'dashboard':
         return <Panel searchQuery={searchQuery} />;
       case 'inventory':
@@ -34,10 +45,12 @@ export const LayoutPrincipal: React.FC = () => {
         return <Clientes />;
       case 'suppliers':
         return <Proveedores />;
+      case 'sellers':
+        return <Vendedores />;
       default:
         return (
           <main style={{ padding: '32px', color: 'var(--color-text-secondary)', fontSize: '15px' }}>
-            <p>🚧 Sección en construcción: <strong>{activeTab}</strong></p>
+            <p>🚧 Sección en construcción: <strong>{tabEfectiva}</strong></p>
           </main>
         );
     }
@@ -46,7 +59,7 @@ export const LayoutPrincipal: React.FC = () => {
   return (
     <div className={styles.dashboardContainer}>
       {/* Left Navigation Sidebar — controlled by LayoutPrincipal */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={tabEfectiva} onTabChange={setActiveTab} />
 
       {/* Main Content Area */}
       <div className={styles.mainWrapper}>

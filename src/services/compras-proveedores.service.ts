@@ -6,6 +6,7 @@ export type EstadoCompra = 'Completada' | 'Anulada';
 export interface DetalleCompraProveedor {
   id_detalle_compra?: number;
   id_compra?: number;
+  id_detalle_pedido?: number | null;
   id_producto: number;
   cantidad_recibida: number;
   precio_costo_unitario: number;
@@ -21,6 +22,7 @@ export interface CompraProveedor {
   fecha_recepcion: string;
   total_pagado: number;
   estado: EstadoCompra | string;
+  comprobante_url?: string | null;
   detalles?: DetalleCompraProveedor[];
   razon_social_proveedor?: string;
   nombre_usuario?: string;
@@ -28,6 +30,7 @@ export interface CompraProveedor {
 
 export interface DetalleCompraPayload {
   id_producto: number;
+  id_detalle_pedido?: number;
   cantidad_recibida: number;
   precio_costo_unitario: number;
 }
@@ -37,6 +40,7 @@ export interface CompraPayload {
   id_usuario: number;
   id_pedido?: number;
   fecha_recepcion: string;
+  comprobante_url?: string | null;
   detalles: DetalleCompraPayload[];
 }
 
@@ -56,7 +60,7 @@ export const comprasService = {
 
   create: (data: CompraPayload) => api.post<CompraProveedor>('/compras-proveedores', data),
 
-  update: (id: number, data: { fecha_recepcion?: string }) =>
+  update: (id: number, data: { fecha_recepcion?: string; comprobante_url?: string | null }) =>
     api.patch<CompraProveedor>(`/compras-proveedores/${id}`, data),
 
   remove: (id: number) => api.delete<CompraProveedor>(`/compras-proveedores/${id}`),

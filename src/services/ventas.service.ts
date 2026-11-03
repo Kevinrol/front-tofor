@@ -24,12 +24,15 @@ export interface Venta {
   tipo_venta: TipoVenta | string;
   metodo_pago: MetodoPago | string;
   monto_total: number;
+  monto_descuento?: number;
   monto_efectivo?: number | null;
   monto_cambio?: number | null;
   estado_pago: EstadoPagoVenta | string;
   detalles?: DetalleVenta[];
   nombre_usuario?: string;
   nombre_cliente?: string;
+  nit_cliente?: string;
+  tipo_cliente?: string;
 }
 
 export interface DetalleVentaPayload {
@@ -42,6 +45,7 @@ export interface VentaPayload {
   id_cliente?: number;
   tipo_venta: TipoVenta;
   metodo_pago: MetodoPago;
+  monto_descuento?: number;
   monto_efectivo?: number;
   estado_pago?: EstadoPagoVenta;
   fecha_hora?: string;
@@ -70,3 +74,4 @@ export const ventasService = {
 
   remove: (id: number) => api.delete<Venta>(`/ventas/${id}`),
 };
+

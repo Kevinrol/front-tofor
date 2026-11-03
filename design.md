@@ -54,7 +54,7 @@ Para separar sutilmente los componentes, secciones y filas de tablas sin recarga
 *   **Border Claro:** `#F0F0F2` (Separadores muy delicados en encabezados)
 
 ### Colores Semánticos (Status Indicators)
-Usados para comunicar el estado del sistema, alertas, y métricas financieras o de inventario (tendencias positivas/negativas).
+Usados para comunicar el estado del sistema, alertas, y métricas financieras o de stock (tendencias positivas/negativas).
 
 *   🟢 **Éxito (Success):** `#059669` (Texto/Iconos) | *Fondo Éxito:* `#E6F7ED` (Para badges y alertas positivas)
 *   🟡 **Advertencia (Warning):** `#D97706` (Texto/Iconos) | *Fondo Advertencia:* `#FEF3C7` (Para stock bajo o alertas de atención)

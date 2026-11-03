@@ -11,6 +11,7 @@ import {
   Receipt,
   Wallet,
   TrendingUp,
+  Printer,
   X,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
@@ -29,6 +30,7 @@ import {
 import { productosService, Producto } from '../../services/productos.service';
 import { clientesService, Cliente } from '../../services/clientes.service';
 import { usuariosService, Usuario } from '../../services/usuarios.service';
+import { useContextoAuth } from '../../context/ContextoAuth';
 import { formatearMoneda, formatearFechaHora } from '../../utils/formato';
 import { aNumero } from '../../utils/consulta';
 
@@ -43,6 +45,7 @@ interface FormState {
   tipo_venta: TipoVenta;
   metodo_pago: MetodoPago;
   estado_pago: EstadoPagoVenta;
+  monto_descuento: string;
   monto_efectivo: string;
   detalles: LineaForm[];
 }
@@ -55,12 +58,13 @@ const FORM_VACIO: FormState = {
   tipo_venta: 'Contado',
   metodo_pago: 'Efectivo',
   estado_pago: 'Pagado',
+  monto_descuento: '0',
   monto_efectivo: '',
   detalles: [{ ...LINEA_VACIA }],
 };
 
 const TIPOS_VENTA: TipoVenta[] = ['Contado', 'Credito'];
-const METODOS: MetodoPago[] = ['Efectivo', 'QR', 'Transferencia'];
+const METODOS: MetodoPago[] = ['Efectivo', 'QR'];
 const ESTADOS: EstadoPagoVenta[] = ['Pagado', 'Pendiente', 'Anulado'];
 
 type FiltroEstado = 'all' | EstadoPagoVenta;
@@ -69,6 +73,7 @@ const POR_PAGINA_INICIAL = 5;
 
 export const Ventas: React.FC = () => {
   const { toast, showToast, closeToast } = useToast();
+  const { usuario: usuarioAuth, esAdmin } = useContextoAuth();
 
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -83,7 +88,9 @@ export const Ventas: React.FC = () => {
   const [form, setForm] = useState<FormState>(FORM_VACIO);
 
   const [search, setSearch] = useState('');
+  const [busquedaRapida, setBusquedaRapida] = useState('');
   const [filtro, setFiltro] = useState<FiltroEstado>('all');
+  const [filtroVendedor, setFiltroVendedor] = useState<string>('all');
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(POR_PAGINA_INICIAL);
 
@@ -115,14 +122,14 @@ export const Ventas: React.FC = () => {
 
   useEffect(() => {
     setPagina(1);
-  }, [search, filtro]);
+  }, [search, filtro, filtroVendedor]);
 
   const precioDe = (idProducto: string): number => {
     const prod = productos.find((p) => String(p.id_producto) === idProducto);
     return prod ? Number(prod.precio) : 0;
   };
 
-  const totalEstimado = useMemo(
+  const subtotalEstimado = useMemo(
     () =>
       form.detalles.reduce((acc, linea) => {
         const cantidad = Number(linea.cantidad) || 0;
@@ -132,11 +139,64 @@ export const Ventas: React.FC = () => {
     [form.detalles, productos]
   );
 
+  const clienteSeleccionado = useMemo(
+    () => clientes.find((c) => String(c.id_cliente) === form.id_cliente),
+    [clientes, form.id_cliente]
+  );
+
+  // ponytail: 10% wholesale auto-discount heuristic, replace with per-client column if rates diverge
+  useEffect(() => {
+    if (!editando && clienteSeleccionado?.tipo_cliente === 'Mayorista') {
+      setForm((prev) => ({
+        ...prev,
+        monto_descuento: (subtotalEstimado * 0.1).toFixed(2),
+      }));
+    }
+  }, [clienteSeleccionado?.id_cliente, clienteSeleccionado?.tipo_cliente, subtotalEstimado, editando]);
+
+  const descuentoNum = Math.max(0, Number(form.monto_descuento) || 0);
+  const totalEstimado = Math.max(0, subtotalEstimado - descuentoNum);
+
+  const agregarPorBusqueda = (q: string) => {
+    const term = q.trim().toLowerCase();
+    if (!term) return;
+    const match = productos.find(
+      (p) =>
+        (p.codigo_barras ?? '').toLowerCase() === term ||
+        p.nombre_producto.toLowerCase().includes(term)
+    );
+    if (!match?.id_producto) {
+      showToast('Producto no encontrado.', 'error');
+      return;
+    }
+    const idStr = String(match.id_producto);
+    setForm((prev) => {
+      const idx = prev.detalles.findIndex((d) => d.id_producto === idStr);
+      if (idx >= 0) {
+        const detalles = prev.detalles.map((d, i) =>
+          i === idx ? { ...d, cantidad: String((Number(d.cantidad) || 0) + 1) } : d
+        );
+        return { ...prev, detalles };
+      }
+      if (prev.detalles.length === 1 && !prev.detalles[0].id_producto) {
+        return { ...prev, detalles: [{ id_producto: idStr, cantidad: '1' }] };
+      }
+      return { ...prev, detalles: [...prev.detalles, { id_producto: idStr, cantidad: '1' }] };
+    });
+    setBusquedaRapida('');
+  };
+
   const abrirCrear = () => {
     setEditando(null);
+    const idPorDefecto =
+      usuarioAuth?.id_usuario != null
+        ? String(usuarioAuth.id_usuario)
+        : usuarios[0]?.id_usuario != null
+          ? String(usuarios[0].id_usuario)
+          : '';
     setForm({
       ...FORM_VACIO,
-      id_usuario: usuarios[0]?.id_usuario != null ? String(usuarios[0].id_usuario) : '',
+      id_usuario: idPorDefecto,
       detalles: [{ ...LINEA_VACIA }],
     });
     setModalOpen(true);
@@ -218,6 +278,7 @@ export const Ventas: React.FC = () => {
           id_usuario: idUsuario,
           tipo_venta: form.tipo_venta,
           metodo_pago: form.metodo_pago,
+          monto_descuento: descuentoNum,
           detalles,
         };
         const idCliente = aNumero(form.id_cliente);
@@ -240,7 +301,8 @@ export const Ventas: React.FC = () => {
           payload.estado_pago = form.estado_pago;
         }
 
-        await ventasService.create(payload);
+        const creada = await ventasService.create(payload);
+        setDetalle(creada);
         showToast('Venta registrada y stock descontado.');
       }
       setModalOpen(false);
@@ -273,9 +335,11 @@ export const Ventas: React.FC = () => {
         (v.nombre_usuario ?? '').toLowerCase().includes(q) ||
         String(v.id_venta ?? '').includes(q);
       const porEstado = filtro === 'all' ? true : v.estado_pago === filtro;
-      return coincide && porEstado;
+      const porVendedor =
+        filtroVendedor === 'all' ? true : String(v.id_usuario) === filtroVendedor;
+      return coincide && porEstado && porVendedor;
     });
-  }, [ventas, search, filtro]);
+  }, [ventas, search, filtro, filtroVendedor]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / porPagina));
   const paginaActual = Math.min(pagina, totalPaginas);
@@ -305,7 +369,7 @@ export const Ventas: React.FC = () => {
             </span>
           </div>
           <p className={styles.subtitle}>
-            Registro de ventas con descuento automático de inventario, control de pagos y
+            Registro de ventas con descuento automático de stock, control de pagos y
             comprobantes.
           </p>
         </div>
@@ -367,6 +431,24 @@ export const Ventas: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          {esAdmin && (
+            <select
+              className={styles.select}
+              style={{ maxWidth: 230, height: 36 }}
+              value={filtroVendedor}
+              onChange={(e) => setFiltroVendedor(e.target.value)}
+              aria-label="Filtrar ventas por vendedor"
+            >
+              <option value="all">Todos los vendedores</option>
+              {usuarios
+                .filter((u) => u.rol !== 'SUPER_ADMIN')
+                .map((u) => (
+                  <option key={u.id_usuario} value={String(u.id_usuario)}>
+                    {u.nombre_completo}
+                  </option>
+                ))}
+            </select>
+          )}
           <div className={styles.filters}>
             <button
               type="button"
@@ -418,7 +500,18 @@ export const Ventas: React.FC = () => {
                   <tr key={v.id_venta}>
                     <td className={styles.strong}>#{v.id_venta}</td>
                     <td className={styles.muted}>{formatearFechaHora(v.fecha_hora)}</td>
-                    <td>{v.nombre_cliente || <span className={styles.muted}>General</span>}</td>
+                    <td>
+                      {v.nombre_cliente ? (
+                        <>
+                          <span className={styles.strong}>{v.nombre_cliente}</span>{' '}
+                          {v.tipo_cliente === 'Mayorista' && (
+                            <span className={`${styles.pill} ${styles.pillInfo}`}>Mayorista</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className={styles.muted}>General</span>
+                      )}
+                    </td>
                     <td className={styles.muted}>{v.nombre_usuario || '—'}</td>
                     <td>
                       <span className={`${styles.pill} ${styles.pillNeutral}`}>{v.metodo_pago}</span>
@@ -439,23 +532,27 @@ export const Ventas: React.FC = () => {
                         >
                           <Eye size={15} />
                         </button>
-                        <button
-                          type="button"
-                          className={styles.iconBtn}
-                          title="Editar pago / cliente"
-                          onClick={() => abrirEditar(v)}
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                          title="Anular"
-                          onClick={() => anular(v)}
-                          disabled={v.estado_pago === 'Anulado'}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {esAdmin && (
+                          <>
+                            <button
+                              type="button"
+                              className={styles.iconBtn}
+                              title="Editar pago / cliente"
+                              onClick={() => abrirEditar(v)}
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
+                              title="Anular"
+                              onClick={() => anular(v)}
+                              disabled={v.estado_pago === 'Anulado'}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -552,6 +649,7 @@ export const Ventas: React.FC = () => {
                 className={styles.select}
                 value={form.id_usuario}
                 onChange={(e) => setForm((prev) => ({ ...prev, id_usuario: e.target.value }))}
+                disabled={!esAdmin}
               >
                 <option value="">Seleccionar usuario</option>
                 {usuarios.map((u) => (
@@ -570,15 +668,31 @@ export const Ventas: React.FC = () => {
                 id="venta-cliente-nuevo"
                 className={styles.select}
                 value={form.id_cliente}
-                onChange={(e) => setForm((prev) => ({ ...prev, id_cliente: e.target.value }))}
+                onChange={(e) => setForm((prev) => ({ ...prev, id_cliente: e.target.value, monto_descuento: '0' }))}
               >
-                <option value="">Venta general</option>
+                <option value="">Venta general (Minorista ocasional)</option>
                 {clientes.map((c) => (
                   <option key={c.id_cliente} value={c.id_cliente}>
-                    {c.razon_social_nombre}
+                    {c.razon_social_nombre} ({c.tipo_cliente})
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="venta-descuento">
+                Descuento (Bs) {clienteSeleccionado?.tipo_cliente === 'Mayorista' && '· Mayorista 10% auto'}
+              </label>
+              <input
+                id="venta-descuento"
+                className={styles.input}
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.monto_descuento}
+                onChange={(e) => setForm((prev) => ({ ...prev, monto_descuento: e.target.value }))}
+                placeholder="0.00"
+              />
             </div>
 
             <div className={styles.field}>
@@ -659,11 +773,39 @@ export const Ventas: React.FC = () => {
             <div className={`${styles.field} ${styles.formGridFull}`}>
               <div className={styles.linesHeader}>
                 <span className={styles.linesTitle}>
-                  <ShoppingBag size={15} /> Productos
+                  <ShoppingBag size={15} /> Canasta de Productos
                 </span>
-                <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={agregarLinea}>
-                  <Plus size={14} /> Agregar
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    className={styles.input}
+                    style={{ width: '240px', padding: '5px 10px' }}
+                    type="text"
+                    list="lista-productos-pos"
+                    placeholder="Buscar código o nombre + Enter..."
+                    value={busquedaRapida}
+                    onChange={(e) => setBusquedaRapida(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        agregarPorBusqueda(busquedaRapida);
+                      }
+                    }}
+                  />
+                  <datalist id="lista-productos-pos">
+                    {productos.map((p) => (
+                      <option key={p.id_producto} value={p.codigo_barras || p.nombre_producto}>
+                        {p.nombre_producto} — {formatearMoneda(p.precio)} (Stock: {p.stock_actual})
+                      </option>
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                    onClick={() => (busquedaRapida.trim() ? agregarPorBusqueda(busquedaRapida) : agregarLinea())}
+                  >
+                    <Plus size={14} /> Agregar
+                  </button>
+                </div>
               </div>
 
               <div className={`${styles.lineRow} ${styles.lineRowHead}`}>
@@ -714,7 +856,9 @@ export const Ventas: React.FC = () => {
               })}
 
               <div className={styles.lineTotal}>
-                <span className={styles.lineTotalLabel}>Total estimado</span>
+                <span className={styles.lineTotalLabel}>
+                  Subtotal: {formatearMoneda(subtotalEstimado)} · Desc: -{formatearMoneda(descuentoNum)} · Total a cobrar
+                </span>
                 {formatearMoneda(totalEstimado)}
               </div>
             </div>
@@ -722,12 +866,21 @@ export const Ventas: React.FC = () => {
         )}
       </Modal>
 
-      {/* Modal detalle */}
+      {/* Modal detalle / Comprobante */}
       <Modal
         open={detalle !== null}
-        title={`Detalle de Venta #${detalle?.id_venta ?? ''}`}
+        title={`Nota de Venta #${detalle?.id_venta ?? ''} — Librería TOFOR`}
         onClose={() => setDetalle(null)}
         width={680}
+        footer={
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={() => window.print()}
+          >
+            <Printer size={16} /> Imprimir / Guardar PDF
+          </button>
+        }
       >
         {detalle && (
           <>
@@ -737,8 +890,12 @@ export const Ventas: React.FC = () => {
                 <span className={styles.detailItemValue}>{formatearFechaHora(detalle.fecha_hora)}</span>
               </div>
               <div className={styles.detailItem}>
-                <span className={styles.detailItemLabel}>Cliente</span>
-                <span className={styles.detailItemValue}>{detalle.nombre_cliente || 'General'}</span>
+                <span className={styles.detailItemLabel}>Cliente / NIT-CI</span>
+                <span className={styles.detailItemValue}>
+                  {detalle.nombre_cliente
+                    ? `${detalle.nombre_cliente} (${detalle.nit_cliente || 'S/N'} · ${detalle.tipo_cliente || ''})`
+                    : 'General (Mostrador)'}
+                </span>
               </div>
               <div className={styles.detailItem}>
                 <span className={styles.detailItemLabel}>Vendedor</span>
@@ -775,8 +932,13 @@ export const Ventas: React.FC = () => {
               </table>
             </div>
 
+            {Number(detalle.monto_descuento) > 0 && (
+              <div className={styles.hint} style={{ textAlign: 'right', marginTop: '8px' }}>
+                Descuento aplicado: -{formatearMoneda(detalle.monto_descuento)}
+              </div>
+            )}
             <div className={styles.lineTotal}>
-              <span className={styles.lineTotalLabel}>Total</span>
+              <span className={styles.lineTotalLabel}>Total Cobrado</span>
               {formatearMoneda(detalle.monto_total)}
             </div>
             {detalle.metodo_pago === 'Efectivo' && (

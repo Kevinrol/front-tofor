@@ -1,0 +1,133 @@
+.contenedor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.etiqueta {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.areaSubida {
+  border: 2px dashed #d1d5db;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: #f9fafb;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.areaSubida:hover:not(.deshabilitado) {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.deshabilitado {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inputOculto {
+  display: none;
+}
+
+.icono {
+  color: #6b7280;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.textoPrincipal {
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin: 0;
+}
+
+.textoDestacado {
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.textoSecundario {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.cardCargado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.5rem;
+}
+
+.infoArchivo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.iconoExito {
+  color: #16a34a;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.enlaceArchivo {
+  font-size: 0.85rem;
+  color: #15803d;
+  font-weight: 500;
+  text-decoration: underline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accionesCargado {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.botonIcono {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: #ef4444;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.botonIcono:hover {
+  background-color: #fee2e2;
+}
+
+.cargando {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #2563eb;
+  font-size: 0.875rem;
+}

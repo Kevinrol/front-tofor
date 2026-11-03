@@ -12,6 +12,7 @@ import {
   Phone,
   MapPin,
   CheckCircle2,
+  Receipt,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
 import { Modal } from '../../components/Modal/Modal';
@@ -24,6 +25,8 @@ import {
   ClientePayload,
   TipoCliente,
 } from '../../services/clientes.service';
+import { ventasService, Venta } from '../../services/ventas.service';
+import { formatearMoneda, formatearFechaHora } from '../../utils/formato';
 
 interface FormState {
   id_cliente?: number;
@@ -59,6 +62,23 @@ export const Clientes: React.FC = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
+  const [clienteHistorial, setClienteHistorial] = useState<Cliente | null>(null);
+  const [ventasCliente, setVentasCliente] = useState<Venta[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+
+  const verHistorial = async (cliente: Cliente) => {
+    if (!cliente.id_cliente) return;
+    setClienteHistorial(cliente);
+    setLoadingHistorial(true);
+    try {
+      const data = await ventasService.getAll({ id_cliente: cliente.id_cliente });
+      setVentasCliente(data || []);
+    } catch {
+      showToast('No se pudo cargar el historial de compras.', 'error');
+    } finally {
+      setLoadingHistorial(false);
+    }
+  };
 
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<FiltroTipo>('all');
@@ -349,6 +369,14 @@ export const Clientes: React.FC = () => {
                         <button
                           type="button"
                           className={styles.iconBtn}
+                          title="Historial de compras"
+                          onClick={() => verHistorial(c)}
+                        >
+                          <Receipt size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
                           title="Editar"
                           onClick={() => abrirEditar(c)}
                         >
@@ -493,6 +521,65 @@ export const Clientes: React.FC = () => {
             </select>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={clienteHistorial !== null}
+        title={`Historial de Compras — ${clienteHistorial?.razon_social_nombre ?? ''}`}
+        onClose={() => setClienteHistorial(null)}
+        width={680}
+      >
+        {loadingHistorial ? (
+          <div className={styles.loadingRow}>
+            <Loader2 size={18} className={styles.spinner} /> Cargando historial...
+          </div>
+        ) : ventasCliente.length === 0 ? (
+          <div className={styles.empty}>
+            <Receipt size={32} color="var(--color-text-placeholder)" />
+            <span className={styles.emptyTitle}>Sin compras registradas</span>
+          </div>
+        ) : (
+          <>
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>N° Venta</th>
+                    <th>Fecha</th>
+                    <th>Método</th>
+                    <th className={styles.right}>Descuento</th>
+                    <th className={styles.right}>Total</th>
+                    <th className={styles.center}>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ventasCliente.map((v) => (
+                    <tr key={v.id_venta}>
+                      <td className={styles.strong}>#{v.id_venta}</td>
+                      <td className={styles.muted}>{formatearFechaHora(v.fecha_hora)}</td>
+                      <td>{v.metodo_pago}</td>
+                      <td className={`${styles.right} ${styles.muted}`}>
+                        {formatearMoneda(v.monto_descuento ?? 0)}
+                      </td>
+                      <td className={`${styles.right} ${styles.money}`}>{formatearMoneda(v.monto_total)}</td>
+                      <td className={styles.center}>
+                        <span className={`${styles.pill} ${styles.pillNeutral}`}>{v.estado_pago}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className={styles.lineTotal}>
+              <span className={styles.lineTotalLabel}>Total Acumulado (sin anuladas)</span>
+              {formatearMoneda(
+                ventasCliente
+                  .filter((v) => v.estado_pago !== 'Anulado')
+                  .reduce((acc, v) => acc + Number(v.monto_total), 0)
+              )}
+            </div>
+          </>
+        )}
       </Modal>
     </main>
   );

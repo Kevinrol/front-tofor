@@ -87,7 +87,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({ products }) => {
       <header className={styles.header}>
         <div className={styles.titleArea}>
           <h2 className={styles.title}>Productos Más Vendidos & Estado de Stock</h2>
-          <p className={styles.subtitle}>Listado en tiempo real con inventario y precio de venta</p>
+          <p className={styles.subtitle}>Listado en tiempo real con existencias y precio de venta</p>
         </div>
 
         <a 

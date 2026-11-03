@@ -3,7 +3,23 @@
  * Uso: import { api } from '../services/api';
  */
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+export const AUTH_STORAGE_KEY = 'tofor_auth';
+
+function buildHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { access_token?: string };
+      if (parsed?.access_token) {
+        headers.Authorization = `Bearer ${parsed.access_token}`;
+      }
+    }
+  } catch {
+    // Ignorar errores de parseo de localStorage
+  }
+  return headers;
+}
 
 /**
  * Ejecuta una petición HTTP y normaliza la respuesta.
@@ -12,7 +28,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 async function request<T>(method: string, endpoint: string, data?: unknown): Promise<T> {
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method,
-    headers: JSON_HEADERS,
+    headers: buildHeaders(),
     body: data !== undefined ? JSON.stringify(data) : undefined,
   });
 

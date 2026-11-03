@@ -200,7 +200,7 @@ export const Productos: React.FC = () => {
   const totalBajoStock = productos.filter(
     (p) => p.estado && Number(p.stock_actual) <= Number(p.stock_minimo)
   ).length;
-  const valorInventario = productos.reduce(
+  const valorStock = productos.reduce(
     (acc, p) => acc + Number(p.precio) * Number(p.stock_actual),
     0
   );
@@ -218,8 +218,7 @@ export const Productos: React.FC = () => {
             </span>
           </div>
           <p className={styles.subtitle}>
-            Alta, edición y control del inventario escolar. Administra precios, existencias y
-            niveles mínimos de reposición.
+            Alta, edición y control del Stock. Administra precios y existencias.
           </p>
         </div>
         <div className={styles.headerActions}>
@@ -255,8 +254,8 @@ export const Productos: React.FC = () => {
             <DollarSign size={22} />
           </div>
           <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Valor del Inventario</span>
-            <span className={styles.kpiValue}>{formatearMoneda(valorInventario)}</span>
+            <span className={styles.kpiLabel}>Valor del Stock</span>
+            <span className={styles.kpiValue}>{formatearMoneda(valorStock)}</span>
             <span className={styles.kpiSubtext}>Precio de venta × stock</span>
           </div>
         </div>

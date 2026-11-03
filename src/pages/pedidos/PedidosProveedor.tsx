@@ -14,6 +14,7 @@ import {
   Undo2,
   X,
   Calendar,
+  ExternalLink,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
 import { Modal } from '../../components/Modal/Modal';
@@ -29,6 +30,7 @@ import {
 import { productosService, Producto } from '../../services/productos.service';
 import { proveedoresService, Proveedor } from '../../services/proveedores.service';
 import { usuariosService, Usuario } from '../../services/usuarios.service';
+import { SelectorComprobante } from '../../components/SelectorComprobante/SelectorComprobante';
 import { formatearMoneda, formatearFecha, aDateInput } from '../../utils/formato';
 import { aNumero } from '../../utils/consulta';
 
@@ -45,6 +47,7 @@ interface FormState {
   id_usuario: string;
   fecha_entrega_estimada: string;
   estado_pedido: EstadoPedido;
+  comprobante_url: string;
   detalles: LineaForm[];
 }
 
@@ -61,11 +64,12 @@ const FORM_VACIO: FormState = {
   id_usuario: '',
   fecha_entrega_estimada: '',
   estado_pedido: 'Pendiente',
+  comprobante_url: '',
   detalles: [{ ...LINEA_VACIA }],
 };
 
 const UNIDADES = ['Unidad', 'Caja', 'Paquete', 'Docena', 'Media Docena', 'Gruesa'];
-const ESTADOS: EstadoPedido[] = ['Pendiente', 'Enviado', 'Recibido', 'Cancelado'];
+const ESTADOS: EstadoPedido[] = ['Pendiente', 'Enviado', 'Parcial', 'Recibido', 'Cancelado'];
 
 type FiltroEstado = 'all' | EstadoPedido;
 
@@ -91,6 +95,10 @@ export const PedidosProveedor: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<PedidoProveedor | null>(null);
   const [detalle, setDetalle] = useState<PedidoProveedor | null>(null);
+  const [pedidoARecibir, setPedidoARecibir] = useState<PedidoProveedor | null>(null);
+  const [comprobanteRecepcion, setComprobanteRecepcion] = useState<string>('');
+  const [usuarioRecepcion, setUsuarioRecepcion] = useState<string>('');
+  const [recibiendo, setRecibiendo] = useState<boolean>(false);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
 
   const [search, setSearch] = useState('');
@@ -138,6 +146,7 @@ export const PedidosProveedor: React.FC = () => {
     setForm({
       ...FORM_VACIO,
       id_usuario: usuarios[0]?.id_usuario != null ? String(usuarios[0].id_usuario) : '',
+      comprobante_url: '',
       detalles: [{ ...LINEA_VACIA }],
     });
     setModalOpen(true);
@@ -150,6 +159,7 @@ export const PedidosProveedor: React.FC = () => {
       id_usuario: String(pedido.id_usuario),
       fecha_entrega_estimada: aDateInput(pedido.fecha_entrega_estimada),
       estado_pedido: (pedido.estado_pedido as EstadoPedido) ?? 'Pendiente',
+      comprobante_url: pedido.comprobante_url || '',
       detalles: [{ ...LINEA_VACIA }],
     });
     setModalOpen(true);
@@ -181,12 +191,18 @@ export const PedidosProveedor: React.FC = () => {
     setSaving(true);
     try {
       if (editando?.id_pedido != null) {
-        const payload: { fecha_entrega_estimada?: string; estado_pedido?: EstadoPedido } = {
-          estado_pedido: form.estado_pedido,
-        };
+        const payload: { fecha_entrega_estimada?: string; estado_pedido?: EstadoPedido; comprobante_url?: string | null } = {};
         if (form.fecha_entrega_estimada) {
           payload.fecha_entrega_estimada = new Date(form.fecha_entrega_estimada).toISOString();
         }
+        if (
+          editando.estado_pedido !== 'Parcial' &&
+          (form.estado_pedido === 'Enviado' || form.estado_pedido === 'Cancelado') &&
+          form.estado_pedido !== editando.estado_pedido
+        ) {
+          payload.estado_pedido = form.estado_pedido;
+        }
+        payload.comprobante_url = form.comprobante_url || null;
         await pedidosService.update(editando.id_pedido, payload);
         showToast('Pedido actualizado correctamente.');
       } else {
@@ -230,7 +246,7 @@ export const PedidosProveedor: React.FC = () => {
         const payload: PedidoPayload = {
           id_proveedor: idProveedor,
           id_usuario: idUsuario,
-          estado_pedido: form.estado_pedido,
+          comprobante_url: form.comprobante_url || null,
           detalles,
         };
         if (form.fecha_entrega_estimada) {
@@ -260,20 +276,31 @@ export const PedidosProveedor: React.FC = () => {
     }
   };
 
-  const recibir = async (pedido: PedidoProveedor) => {
+  const recibir = (pedido: PedidoProveedor) => {
     if (pedido.id_pedido == null) return;
-    if (
-      !window.confirm(
-        `¿Recibir el pedido #${pedido.id_pedido}? Se generará la compra y se incrementará el stock.`
-      )
-    )
-      return;
+    setPedidoARecibir(pedido);
+    setComprobanteRecepcion('');
+    setUsuarioRecepcion(usuarios[0]?.id_usuario ? String(usuarios[0].id_usuario) : '');
+  };
+
+  const confirmarRecepcion = async () => {
+    if (pedidoARecibir?.id_pedido == null) return;
+    setRecibiendo(true);
     try {
-      const resultado = await pedidosService.recibir(pedido.id_pedido);
-      showToast(resultado?.mensaje || 'Pedido recibido correctamente.');
+      const idUsr = aNumero(usuarioRecepcion);
+      const resultado = await pedidosService.recibir(
+        pedidoARecibir.id_pedido,
+        idUsr,
+        undefined,
+        comprobanteRecepcion || null
+      );
+      showToast(resultado?.mensaje || 'Pedido recibido y compra generada correctamente.');
+      setPedidoARecibir(null);
       await cargar();
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Error al recibir el pedido.', 'error');
+    } finally {
+      setRecibiendo(false);
     }
   };
 
@@ -295,9 +322,11 @@ export const PedidosProveedor: React.FC = () => {
   const visibles = filtrados.slice((paginaActual - 1) * porPagina, paginaActual * porPagina);
 
   const totalPedidos = pedidos.length;
-  const pendientes = pedidos.filter((p) => p.estado_pedido === 'Pendiente' || p.estado_pedido === 'Enviado').length;
+  const esPorRecibir = (estado: string) =>
+    estado === 'Pendiente' || estado === 'Enviado' || estado === 'Parcial';
+  const pendientes = pedidos.filter((p) => esPorRecibir(String(p.estado_pedido))).length;
   const valorPendiente = pedidos
-    .filter((p) => p.estado_pedido === 'Pendiente' || p.estado_pedido === 'Enviado')
+    .filter((p) => esPorRecibir(String(p.estado_pedido)))
     .reduce((acc, p) => acc + Number(p.total_pedido), 0);
 
   const pillEstado = (estado: string) =>
@@ -305,7 +334,7 @@ export const PedidosProveedor: React.FC = () => {
       ? styles.pillSuccess
       : estado === 'Cancelado'
         ? styles.pillDanger
-        : estado === 'Enviado'
+        : estado === 'Enviado' || estado === 'Parcial'
           ? styles.pillInfo
           : styles.pillWarning;
 
@@ -323,7 +352,7 @@ export const PedidosProveedor: React.FC = () => {
           </div>
           <p className={styles.subtitle}>
             Genera órdenes de pedido a distribuidores y recíbelas para ingresar mercadería al
-            inventario automáticamente.
+            stock automáticamente.
           </p>
         </div>
         <div className={styles.headerActions}>
@@ -351,7 +380,7 @@ export const PedidosProveedor: React.FC = () => {
           <div className={styles.kpiContent}>
             <span className={styles.kpiLabel}>Por Recibir</span>
             <span className={styles.kpiValue}>{pendientes}</span>
-            <span className={styles.kpiSubtext}>Pendientes y enviados</span>
+            <span className={styles.kpiSubtext}>Pendientes, enviados y parciales</span>
           </div>
         </div>
         <div className={styles.kpiCard}>
@@ -475,7 +504,11 @@ export const PedidosProveedor: React.FC = () => {
                             className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
                             title="Cancelar"
                             onClick={() => cancelar(p)}
-                            disabled={p.estado_pedido === 'Recibido' || p.estado_pedido === 'Cancelado'}
+                            disabled={
+                              p.estado_pedido === 'Recibido' ||
+                              p.estado_pedido === 'Parcial' ||
+                              p.estado_pedido === 'Cancelado'
+                            }
                           >
                             <Trash2 size={15} />
                           </button>
@@ -535,21 +568,35 @@ export const PedidosProveedor: React.FC = () => {
                 onChange={(e) => setForm((prev) => ({ ...prev, fecha_entrega_estimada: e.target.value }))}
               />
             </div>
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="pedido-estado-edit">
-                Estado del pedido
-              </label>
-              <select
-                id="pedido-estado-edit"
-                className={styles.select}
-                value={form.estado_pedido}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, estado_pedido: e.target.value as EstadoPedido }))
-                }
-              >
-                <option value="Pendiente">Pendiente</option>
-                <option value="Enviado">Enviado</option>
-              </select>
+            {editando.estado_pedido !== 'Parcial' && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="pedido-estado-edit">
+                  Estado del pedido
+                </label>
+                <select
+                  id="pedido-estado-edit"
+                  className={styles.select}
+                  value={form.estado_pedido}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, estado_pedido: e.target.value as EstadoPedido }))
+                  }
+                >
+                  {editando.estado_pedido === 'Pendiente' && (
+                    <option value="Pendiente">Pendiente (actual)</option>
+                  )}
+                  <option value="Enviado">Enviado</option>
+                  <option value="Cancelado">Cancelado</option>
+                </select>
+              </div>
+            )}
+            <div className={`${styles.field} ${styles.formGridFull}`}>
+              <SelectorComprobante
+                urlActual={form.comprobante_url}
+                onArchivoSubido={(url) => setForm((prev) => ({ ...prev, comprobante_url: url }))}
+                onEliminar={() => setForm((prev) => ({ ...prev, comprobante_url: '' }))}
+                carpeta="pedidos"
+                etiqueta="Nota de pedido / Cotización"
+              />
             </div>
           </form>
         ) : (
@@ -605,21 +652,14 @@ export const PedidosProveedor: React.FC = () => {
               />
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="pedido-estado">
-                Estado inicial
-              </label>
-              <select
-                id="pedido-estado"
-                className={styles.select}
-                value={form.estado_pedido}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, estado_pedido: e.target.value as EstadoPedido }))
-                }
-              >
-                <option value="Pendiente">Pendiente</option>
-                <option value="Enviado">Enviado</option>
-              </select>
+            <div className={`${styles.field} ${styles.formGridFull}`}>
+              <SelectorComprobante
+                urlActual={form.comprobante_url}
+                onArchivoSubido={(url) => setForm((prev) => ({ ...prev, comprobante_url: url }))}
+                onEliminar={() => setForm((prev) => ({ ...prev, comprobante_url: '' }))}
+                carpeta="pedidos"
+                etiqueta="Nota de pedido / Cotización previa (opcional)"
+              />
             </div>
 
             <div className={`${styles.field} ${styles.formGridFull}`}>
@@ -744,6 +784,22 @@ export const PedidosProveedor: React.FC = () => {
                   </span>
                 </span>
               </div>
+              {detalle.comprobante_url && (
+                <div className={styles.detailItem}>
+                  <span className={styles.detailItemLabel}>Comprobante adjunto</span>
+                  <span className={styles.detailItemValue}>
+                    <a
+                      href={detalle.comprobante_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      style={{ padding: '2px 8px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#2563eb' }}
+                    >
+                      <ExternalLink size={13} /> Ver archivo adjunto
+                    </a>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className={styles.tableWrap}>
@@ -751,7 +807,9 @@ export const PedidosProveedor: React.FC = () => {
                 <thead>
                   <tr>
                     <th>Producto</th>
-                    <th className={styles.center}>Cantidad</th>
+                    <th className={styles.center}>Solicitado</th>
+                    <th className={styles.center}>Recibido</th>
+                    <th className={styles.center}>Pendiente</th>
                     <th>Unidad</th>
                     <th className={styles.right}>Precio</th>
                     <th className={styles.center}>Desc.</th>
@@ -759,18 +817,24 @@ export const PedidosProveedor: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(detalle.detalles ?? []).map((d, i) => (
-                    <tr key={d.id_detalle_pedido ?? i}>
-                      <td className={styles.strong}>{d.nombre_producto || `Producto #${d.id_producto}`}</td>
-                      <td className={styles.center}>{d.cantidad_solicitada}</td>
-                      <td>{d.unidad_venta}</td>
-                      <td className={`${styles.right} ${styles.money}`}>
-                        {formatearMoneda(d.precio_unitario_compra)}
-                      </td>
-                      <td className={styles.center}>{d.porcentaje_descuento ?? 0}%</td>
-                      <td className={`${styles.right} ${styles.money}`}>{formatearMoneda(d.subtotal)}</td>
-                    </tr>
-                  ))}
+                  {(detalle.detalles ?? []).map((d, i) => {
+                    const recibida = d.cantidad_recibida ?? 0;
+                    const pendiente = d.cantidad_pendiente ?? Math.max(0, d.cantidad_solicitada - recibida);
+                    return (
+                      <tr key={d.id_detalle_pedido ?? i}>
+                        <td className={styles.strong}>{d.nombre_producto || `Producto #${d.id_producto}`}</td>
+                        <td className={styles.center}>{d.cantidad_solicitada}</td>
+                        <td className={styles.center}>{recibida}</td>
+                        <td className={styles.center}>{pendiente}</td>
+                        <td>{d.unidad_venta}</td>
+                        <td className={`${styles.right} ${styles.money}`}>
+                          {formatearMoneda(d.precio_unitario_compra)}
+                        </td>
+                        <td className={styles.center}>{d.porcentaje_descuento ?? 0}%</td>
+                        <td className={`${styles.right} ${styles.money}`}>{formatearMoneda(d.subtotal)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -802,6 +866,81 @@ export const PedidosProveedor: React.FC = () => {
               </div>
             )}
           </>
+        )}
+      </Modal>
+
+      <Modal
+        open={pedidoARecibir !== null}
+        title={`Recepción de Mercadería — Pedido #${pedidoARecibir?.id_pedido ?? ''}`}
+        onClose={() => setPedidoARecibir(null)}
+        width={560}
+        footer={
+          <>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnGhost}`}
+              onClick={() => setPedidoARecibir(null)}
+              disabled={recibiendo}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={confirmarRecepcion}
+              disabled={recibiendo}
+            >
+              {recibiendo ? <Loader2 size={16} className={styles.spinner} /> : <PackageCheck size={16} />}
+              {recibiendo ? 'Recepcionando...' : 'Confirmar Recepción y Generar Compra'}
+            </button>
+          </>
+        }
+      >
+        {pedidoARecibir && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className={styles.detailGrid}>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Proveedor</span>
+                <span className={styles.detailItemValue}>{pedidoARecibir.razon_social_proveedor || '—'}</span>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Total Pedido</span>
+                <span className={styles.detailItemValue}>{formatearMoneda(pedidoARecibir.total_pedido)}</span>
+              </div>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="recepcion-usuario">
+                Personal que recibe la mercadería <span className={styles.requiredMark}>*</span>
+              </label>
+              <select
+                id="recepcion-usuario"
+                className={styles.select}
+                value={usuarioRecepcion}
+                onChange={(e) => setUsuarioRecepcion(e.target.value)}
+              >
+                {usuarios.map((u) => (
+                  <option key={u.id_usuario} value={u.id_usuario}>
+                    {u.nombre_completo} ({u.rol})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.field}>
+              <SelectorComprobante
+                urlActual={comprobanteRecepcion}
+                onArchivoSubido={(url) => setComprobanteRecepcion(url)}
+                onEliminar={() => setComprobanteRecepcion('')}
+                carpeta="pedidos"
+                etiqueta="Nota de entrega / Factura del proveedor (PDF o imagen)"
+              />
+            </div>
+
+            <p style={{ fontSize: '0.82rem', color: '#6b7280', margin: 0, lineHeight: 1.4 }}>
+              Al confirmar, se registrará la recepción de mercadería, se generará la compra asociada enlazada a este pedido y se incrementará automáticamente el stock de los productos.
+            </p>
+          </div>
         )}
       </Modal>
     </main>

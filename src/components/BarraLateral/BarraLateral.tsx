@@ -1,15 +1,16 @@
 import React from 'react';
-import { 
-  LayoutGrid, 
-  Box, 
-  ShoppingBag, 
+import {
+  LayoutGrid,
+  Box,
+  ShoppingBag,
   ShoppingCart,
   ClipboardList,
   Users,
-  Settings, 
+  UserCheck,
   LogOut,
-  Truck
+  Truck,
 } from 'lucide-react';
+import { useContextoAuth } from '../../context/ContextoAuth';
 import styles from './BarraLateral.module.css';
 
 export type NavTab =
@@ -19,7 +20,8 @@ export type NavTab =
   | 'purchases'
   | 'orders'
   | 'clients'
-  | 'suppliers';
+  | 'suppliers'
+  | 'sellers';
 
 interface NavOption {
   id: NavTab;
@@ -33,15 +35,23 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
-  const navItems: NavOption[] = [
-    { id: 'dashboard',  label: 'Panel Principal',    icon: <LayoutGrid size={20} /> },
-    { id: 'inventory',  label: 'Almacén & Stock',    icon: <Box size={20} /> },
-    { id: 'sales',      label: 'Ventas Mostrador',   icon: <ShoppingBag size={20} /> },
-    { id: 'purchases',  label: 'Compras a Proveedor',icon: <ShoppingCart size={20} /> },
-    { id: 'orders',     label: 'Pedidos a Proveedor',icon: <ClipboardList size={20} /> },
-    { id: 'clients',    label: 'Clientes',           icon: <Users size={20} /> },
-    { id: 'suppliers',  label: 'Proveedores',        icon: <Truck size={20} /> },
+  const { esAdmin, logout } = useContextoAuth();
+
+  const allNavItems: NavOption[] = [
+    { id: 'dashboard', label: 'Panel Principal', icon: <LayoutGrid size={20} /> },
+    { id: 'inventory', label: 'Almacén & Stock', icon: <Box size={20} /> },
+    { id: 'sales', label: 'Ventas Mostrador', icon: <ShoppingBag size={20} /> },
+    { id: 'purchases', label: 'Compras a Proveedor', icon: <ShoppingCart size={20} /> },
+    { id: 'orders', label: 'Pedidos a Proveedor', icon: <ClipboardList size={20} /> },
+    { id: 'clients', label: 'Clientes', icon: <Users size={20} /> },
+    { id: 'suppliers', label: 'Proveedores', icon: <Truck size={20} /> },
+    { id: 'sellers', label: 'Vendedores / Personal', icon: <UserCheck size={20} /> },
   ];
+
+  // SUPER_ADMIN y ADMIN ven todas las vistas; VENDEDOR solo ve Ventas Mostrador
+  const navItems = esAdmin
+    ? allNavItems
+    : allNavItems.filter((item) => item.id === 'sales');
 
   return (
     <aside className={styles.sidebar}>
@@ -72,22 +82,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         </nav>
       </div>
 
-      {/* Bottom Settings & Logout */}
+      {/* Bottom Logout */}
       <div className={styles.bottomSection}>
-        <button
-          className={styles.navItem}
-          title="Configuración"
-          aria-label="Configuración"
-          onClick={() => alert('Configuración de la tienda')}
-        >
-          <Settings size={20} />
-          <span className={styles.tooltip}>Configuración</span>
-        </button>
         <button
           className={styles.navItem}
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
-          onClick={() => alert('Cerrar sesión del sistema')}
+          onClick={logout}
         >
           <LogOut size={20} />
           <span className={styles.tooltip}>Salir</span>

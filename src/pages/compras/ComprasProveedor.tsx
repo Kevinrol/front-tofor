@@ -12,6 +12,8 @@ import {
   DollarSign,
   PackageCheck,
   X,
+  ClipboardList,
+  ExternalLink,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
 import { Modal } from '../../components/Modal/Modal';
@@ -26,6 +28,8 @@ import {
 import { productosService, Producto } from '../../services/productos.service';
 import { proveedoresService, Proveedor } from '../../services/proveedores.service';
 import { usuariosService, Usuario } from '../../services/usuarios.service';
+import { pedidosService, PedidoProveedor } from '../../services/pedidos-proveedor.service';
+import { SelectorComprobante } from '../../components/SelectorComprobante/SelectorComprobante';
 import { formatearMoneda, formatearFechaHora, aDatetimeLocal } from '../../utils/formato';
 import { aNumero } from '../../utils/consulta';
 
@@ -39,6 +43,7 @@ interface FormState {
   id_proveedor: string;
   id_usuario: string;
   fecha_recepcion: string;
+  comprobante_url: string;
   detalles: LineaForm[];
 }
 
@@ -48,6 +53,7 @@ const FORM_VACIO: FormState = {
   id_proveedor: '',
   id_usuario: '',
   fecha_recepcion: aDatetimeLocal(new Date()),
+  comprobante_url: '',
   detalles: [{ ...LINEA_VACIA }],
 };
 
@@ -68,6 +74,7 @@ export const ComprasProveedor: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<CompraProveedor | null>(null);
   const [detalle, setDetalle] = useState<CompraProveedor | null>(null);
+  const [pedidoAsociado, setPedidoAsociado] = useState<PedidoProveedor | null>(null);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
 
   const [search, setSearch] = useState('');
@@ -120,6 +127,7 @@ export const ComprasProveedor: React.FC = () => {
     setForm({
       ...FORM_VACIO,
       id_usuario: usuarios[0]?.id_usuario != null ? String(usuarios[0].id_usuario) : '',
+      comprobante_url: '',
       detalles: [{ ...LINEA_VACIA }],
     });
     setModalOpen(true);
@@ -131,6 +139,7 @@ export const ComprasProveedor: React.FC = () => {
       id_proveedor: String(compra.id_proveedor),
       id_usuario: String(compra.id_usuario),
       fecha_recepcion: aDatetimeLocal(compra.fecha_recepcion),
+      comprobante_url: compra.comprobante_url || '',
       detalles: [{ ...LINEA_VACIA }],
     });
     setModalOpen(true);
@@ -142,6 +151,15 @@ export const ComprasProveedor: React.FC = () => {
       setDetalle(await comprasService.getOne(compra.id_compra));
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo cargar el detalle.', 'error');
+    }
+  };
+
+  const verPedidoAsociado = async (idPedido: number) => {
+    try {
+      const p = await pedidosService.getOne(idPedido);
+      setPedidoAsociado(p);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo cargar el pedido asociado.', 'error');
     }
   };
 
@@ -164,6 +182,7 @@ export const ComprasProveedor: React.FC = () => {
       if (editando?.id_compra != null) {
         await comprasService.update(editando.id_compra, {
           fecha_recepcion: new Date(form.fecha_recepcion).toISOString(),
+          comprobante_url: form.comprobante_url || null,
         });
         showToast('Compra actualizada correctamente.');
       } else {
@@ -199,6 +218,7 @@ export const ComprasProveedor: React.FC = () => {
           id_proveedor: idProveedor,
           id_usuario: idUsuario,
           fecha_recepcion: new Date(form.fecha_recepcion).toISOString(),
+          comprobante_url: form.comprobante_url || null,
           detalles,
         };
         await comprasService.create(payload);
@@ -391,7 +411,28 @@ export const ComprasProveedor: React.FC = () => {
                         <button type="button" className={styles.iconBtn} title="Ver detalle" onClick={() => verDetalle(c)}>
                           <Eye size={15} />
                         </button>
-                        <button type="button" className={styles.iconBtn} title="Editar fecha" onClick={() => abrirEditar(c)}>
+                        {c.id_pedido ? (
+                          <button
+                            type="button"
+                            className={styles.iconBtn}
+                            title={`Ver Pedido Asociado (#${c.id_pedido})`}
+                            onClick={() => verPedidoAsociado(c.id_pedido!)}
+                            style={{ color: '#2563eb' }}
+                          >
+                            <ClipboardList size={15} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className={styles.iconBtn}
+                            title="Compra directa (sin pedido asociado)"
+                            disabled
+                            style={{ opacity: 0.3, cursor: 'not-allowed' }}
+                          >
+                            <ClipboardList size={15} />
+                          </button>
+                        )}
+                        <button type="button" className={styles.iconBtn} title="Editar fecha y comprobante" onClick={() => abrirEditar(c)}>
                           <Pencil size={15} />
                         </button>
                         <button
@@ -458,6 +499,16 @@ export const ComprasProveedor: React.FC = () => {
                 onChange={(e) => setForm((prev) => ({ ...prev, fecha_recepcion: e.target.value }))}
               />
             </div>
+
+            <div className={`${styles.field} ${styles.formGridFull}`}>
+              <SelectorComprobante
+                urlActual={form.comprobante_url}
+                onArchivoSubido={(url) => setForm((prev) => ({ ...prev, comprobante_url: url }))}
+                onEliminar={() => setForm((prev) => ({ ...prev, comprobante_url: '' }))}
+                carpeta="compras"
+                etiqueta="Comprobante / Factura de compra"
+              />
+            </div>
           </form>
         ) : (
           <form id="form-compra" onSubmit={guardar} className={styles.formGrid} noValidate>
@@ -509,6 +560,16 @@ export const ComprasProveedor: React.FC = () => {
                 type="datetime-local"
                 value={form.fecha_recepcion}
                 onChange={(e) => setForm((prev) => ({ ...prev, fecha_recepcion: e.target.value }))}
+              />
+            </div>
+
+            <div className={`${styles.field} ${styles.formGridFull}`}>
+              <SelectorComprobante
+                urlActual={form.comprobante_url}
+                onArchivoSubido={(url) => setForm((prev) => ({ ...prev, comprobante_url: url }))}
+                onEliminar={() => setForm((prev) => ({ ...prev, comprobante_url: '' }))}
+                carpeta="compras"
+                etiqueta="Comprobante / Factura de compra (PDF o imagen)"
               />
             </div>
 
@@ -611,6 +672,41 @@ export const ComprasProveedor: React.FC = () => {
                 <span className={styles.detailItemLabel}>Estado</span>
                 <span className={styles.detailItemValue}>{detalle.estado}</span>
               </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Pedido asociado</span>
+                <span className={styles.detailItemValue}>
+                  {detalle.id_pedido ? (
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      style={{ padding: '2px 8px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#2563eb' }}
+                      onClick={() => verPedidoAsociado(detalle.id_pedido!)}
+                    >
+                      <ClipboardList size={13} /> Ver Pedido #{detalle.id_pedido}
+                    </button>
+                  ) : (
+                    <span className={styles.muted}>Compra directa</span>
+                  )}
+                </span>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Comprobante adjunto</span>
+                <span className={styles.detailItemValue}>
+                  {detalle.comprobante_url ? (
+                    <a
+                      href={detalle.comprobante_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      style={{ padding: '2px 8px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#2563eb' }}
+                    >
+                      <ExternalLink size={13} /> Abrir comprobante
+                    </a>
+                  ) : (
+                    <span className={styles.muted}>Sin archivo adjunto</span>
+                  )}
+                </span>
+              </div>
             </div>
 
             <div className={styles.tableWrap}>
@@ -641,6 +737,100 @@ export const ComprasProveedor: React.FC = () => {
             <div className={styles.lineTotal}>
               <span className={styles.lineTotalLabel}>Total pagado</span>
               {formatearMoneda(detalle.total_pagado)}
+            </div>
+          </>
+        )}
+      </Modal>
+
+      <Modal
+        open={pedidoAsociado !== null}
+        title={`Pedido de Abastecimiento Asociado #${pedidoAsociado?.id_pedido ?? ''}`}
+        onClose={() => setPedidoAsociado(null)}
+        width={720}
+      >
+        {pedidoAsociado && (
+          <>
+            <div className={styles.detailGrid}>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Fecha del Pedido</span>
+                <span className={styles.detailItemValue}>{formatearFechaHora(pedidoAsociado.fecha_pedido)}</span>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Proveedor</span>
+                <span className={styles.detailItemValue}>{pedidoAsociado.razon_social_proveedor || '—'}</span>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Solicitado por</span>
+                <span className={styles.detailItemValue}>{pedidoAsociado.nombre_usuario || '—'}</span>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailItemLabel}>Estado del Pedido</span>
+                <span className={styles.detailItemValue}>
+                  <span
+                    className={`${styles.pill} ${
+                      pedidoAsociado.estado_pedido === 'Recibido'
+                        ? styles.pillSuccess
+                        : pedidoAsociado.estado_pedido === 'Parcial'
+                        ? styles.pillWarning
+                        : styles.pillInfo
+                    }`}
+                  >
+                    {pedidoAsociado.estado_pedido}
+                  </span>
+                </span>
+              </div>
+              {pedidoAsociado.fecha_entrega_estimada && (
+                <div className={styles.detailItem}>
+                  <span className={styles.detailItemLabel}>Entrega pactada</span>
+                  <span className={styles.detailItemValue}>{pedidoAsociado.fecha_entrega_estimada}</span>
+                </div>
+              )}
+              {pedidoAsociado.comprobante_url && (
+                <div className={styles.detailItem}>
+                  <span className={styles.detailItemLabel}>Comprobante / Cotización</span>
+                  <span className={styles.detailItemValue}>
+                    <a
+                      href={pedidoAsociado.comprobante_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      style={{ padding: '2px 8px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#2563eb' }}
+                    >
+                      <ExternalLink size={13} /> Ver archivo adjunto
+                    </a>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th className={styles.center}>Solicitado</th>
+                    <th>Unidad</th>
+                    <th className={styles.right}>Costo Unit.</th>
+                    <th className={styles.right}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(pedidoAsociado.detalles ?? []).map((d, i) => (
+                    <tr key={d.id_detalle_pedido ?? i}>
+                      <td className={styles.strong}>{d.nombre_producto || `Producto #${d.id_producto}`}</td>
+                      <td className={styles.center}>{d.cantidad_solicitada}</td>
+                      <td>{d.unidad_venta}</td>
+                      <td className={`${styles.right} ${styles.money}`}>{formatearMoneda(d.precio_unitario_compra)}</td>
+                      <td className={`${styles.right} ${styles.money}`}>{formatearMoneda(d.subtotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className={styles.lineTotal}>
+              <span className={styles.lineTotalLabel}>Total pedido</span>
+              {formatearMoneda(pedidoAsociado.total_pedido)}
             </div>
           </>
         )}

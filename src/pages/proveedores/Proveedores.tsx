@@ -210,13 +210,19 @@ export const Proveedores: React.FC = () => {
 
     setLoading(true);
     try {
-      await proveedoresService.createProveedor(formData);
-      showToast(`Proveedor "${formData.razon_social}" registrado exitosamente.`, 'success');
+      const { id_proveedor, ...payload } = formData;
+      if (id_proveedor) {
+        await proveedoresService.updateProveedor(id_proveedor, payload);
+        showToast(`Proveedor "${formData.razon_social}" actualizado exitosamente.`, 'success');
+      } else {
+        await proveedoresService.createProveedor(payload);
+        showToast(`Proveedor "${formData.razon_social}" registrado exitosamente.`, 'success');
+      }
       handleReset();
       await fetchProveedores();
     } catch (error) {
-      console.error('Error creating proveedor:', error);
-      showToast('Error al registrar el proveedor en el servidor.', 'error');
+      console.error('Error saving proveedor:', error);
+      showToast('Error al guardar el proveedor en el servidor.', 'error');
     } finally {
       setLoading(false);
     }
@@ -224,6 +230,7 @@ export const Proveedores: React.FC = () => {
 
   const handleReset = () => {
     setFormData({
+      id_proveedor: undefined,
       nit: '',
       razon_social: '',
       nombre_contacto: '',
@@ -240,6 +247,7 @@ export const Proveedores: React.FC = () => {
   // Inspect existing supplier in preview card
   const handleSelectSupplierForPreview = (supplier: Proveedor) => {
     setFormData({
+      id_proveedor: supplier.id_proveedor,
       nit: supplier.nit,
       razon_social: supplier.razon_social,
       nombre_contacto: supplier.nombre_contacto || '',
@@ -250,7 +258,7 @@ export const Proveedores: React.FC = () => {
       lineas_productos: supplier.lineas_productos || []
     });
     setActiveView('form');
-    showToast(`Visualizando ficha de "${supplier.razon_social}".`, 'success');
+    showToast(`Editando proveedor "${supplier.razon_social}".`, 'success');
   };
 
   // Metrics calculation
@@ -372,14 +380,14 @@ export const Proveedores: React.FC = () => {
                 disabled={loading}
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {loading ? 'Guardando...' : 'Guardar Proveedor'}
+                {loading ? 'Guardando...' : formData.id_proveedor ? 'Actualizar Proveedor' : 'Guardar Proveedor'}
               </button>
             </>
           ) : (
             <button 
               type="button" 
               className={styles.btnSave} 
-              onClick={() => setActiveView('form')}
+              onClick={() => { handleReset(); setActiveView('form'); }}
             >
               <Plus size={16} />
               Nuevo Proveedor
@@ -733,7 +741,7 @@ export const Proveedores: React.FC = () => {
                 disabled={loading}
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {loading ? 'Procesando...' : 'Registrar Proveedor'}
+                {loading ? 'Procesando...' : formData.id_proveedor ? 'Actualizar Proveedor' : 'Registrar Proveedor'}
               </button>
             </div>
           </form>

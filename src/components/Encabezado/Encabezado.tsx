@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Bell, ChevronDown } from 'lucide-react';
+import { useContextoAuth } from '../../context/ContextoAuth';
+import { RolUsuario } from '../../services/usuarios.service';
 import styles from './Encabezado.module.css';
 
 interface HeaderProps {
@@ -7,13 +9,31 @@ interface HeaderProps {
   onSearchChange: (query: string) => void;
 }
 
+const ETIQUETA_ROL: Record<RolUsuario, string> = {
+  SUPER_ADMIN: 'Super Administrador',
+  ADMIN: 'Administrador',
+  VENDEDOR: 'Vendedor',
+};
+
+function obtenerIniciales(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return 'US';
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
+}
+
 export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange }) => {
+  const { usuario } = useContextoAuth();
   const [currency, setCurrency] = useState<'BOL' | 'USD' | 'ARG'>('BOL');
   const [showNotifications, setShowNotifications] = useState(false);
 
   const toggleCurrency = () => {
     setCurrency((prev) => (prev === 'BOL' ? 'USD' : prev === 'USD' ? 'ARG' : 'BOL'));
   };
+
+  const nombreVisible = usuario?.nombre_completo ?? 'Usuario';
+  const rolVisible = usuario?.rol ? ETIQUETA_ROL[usuario.rol] : 'Sesión activa';
+  const iniciales = obtenerIniciales(nombreVisible);
 
   return (
     <header className={styles.header}>
@@ -27,8 +47,8 @@ export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange }) =
 
       <div className={styles.actionsGroup}>
         {/* Currency Switcher */}
-        <button 
-          className={styles.currencyPill} 
+        <button
+          className={styles.currencyPill}
           onClick={toggleCurrency}
           title="Cambiar divisa"
         >
@@ -62,13 +82,13 @@ export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange }) =
         </button>
 
         {/* User Profile */}
-        <div className={styles.userProfile} title="Perfil de usuario">
+        <div className={styles.userProfile} title={`Usuario: ${usuario?.username ?? ''}`}>
           <div className={styles.userAvatar}>
-            <span>CM</span>
+            <span>{iniciales}</span>
           </div>
           <div className={styles.userDetails}>
-            <span className={styles.userName}>Carlos Méndez</span>
-            <span className={styles.userRole}>Gerente de Tienda</span>
+            <span className={styles.userName}>{nombreVisible}</span>
+            <span className={styles.userRole}>{rolVisible}</span>
           </div>
         </div>
       </div>
