@@ -693,3 +693,20 @@
     grid-template-columns: 1.4fr 0.7fr 0.7fr auto;
   }
 }
+
+.inputError {
+  border-color: #dc2626 !important;
+}
+
+.inputError:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) !important;
+}
+
+.fieldError {
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.3;
+}
+

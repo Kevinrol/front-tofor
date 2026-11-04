@@ -52,6 +52,13 @@ export interface VentaPayload {
   detalles: DetalleVentaPayload[];
 }
 
+export interface VentaUpdatePayload {
+  id_cliente?: number | null;
+  estado_pago?: EstadoPagoVenta;
+  monto_descuento?: number;
+  monto_efectivo?: number;
+}
+
 export interface VentasFiltros {
   desde?: string;
   hasta?: string;
@@ -69,7 +76,7 @@ export const ventasService = {
 
   create: (data: VentaPayload) => api.post<Venta>('/ventas', data),
 
-  update: (id: number, data: { id_cliente?: number; estado_pago?: EstadoPagoVenta }) =>
+  update: (id: number, data: VentaUpdatePayload) =>
     api.patch<Venta>(`/ventas/${id}`, data),
 
   remove: (id: number) => api.delete<Venta>(`/ventas/${id}`),

@@ -11,16 +11,20 @@ import {
   AlertTriangle,
   DollarSign,
   Layers,
+  RefreshCw,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
 import { Modal } from '../../components/Modal/Modal';
 import { Toast } from '../../components/Toast/Toast';
 import { Paginador } from '../../components/Paginador/Paginador';
+import { AjusteStockModal } from '../../components/AjusteStockModal/AjusteStockModal';
 import { useToast } from '../../hooks/useToast';
+import { ApiError } from '../../services/api';
 import { productosService, Producto, ProductoPayload } from '../../services/productos.service';
 import { proveedoresService, Marca, LineaProducto } from '../../services/proveedores.service';
 import { formatearMoneda } from '../../utils/formato';
 import { aNumero } from '../../utils/consulta';
+import { bloquearTeclasNoNumericas, sanitizarEntero } from '../../utils/validacion';
 
 interface FormState {
   id_producto?: number;
@@ -32,6 +36,14 @@ interface FormState {
   stock_actual: string;
   stock_minimo: string;
   estado: boolean;
+}
+
+interface ErroresForm {
+  nombre_producto?: string;
+  codigo_barras?: string;
+  precio?: string;
+  stock_actual?: string;
+  stock_minimo?: string;
 }
 
 const FORM_VACIO: FormState = {
@@ -60,11 +72,15 @@ export const Productos: React.FC = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
+  const [errores, setErrores] = useState<ErroresForm>({});
+  const [productoAjuste, setProductoAjuste] = useState<Producto | null>(null);
 
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<FiltroEstado>('all');
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(POR_PAGINA_INICIAL);
+
+  const hayErrores = Object.values(errores).some(Boolean);
 
   const cargar = async () => {
     setLoading(true);
@@ -96,6 +112,7 @@ export const Productos: React.FC = () => {
 
   const abrirCrear = () => {
     setForm(FORM_VACIO);
+    setErrores({});
     setModalOpen(true);
   };
 
@@ -111,35 +128,78 @@ export const Productos: React.FC = () => {
       stock_minimo: String(producto.stock_minimo ?? 0),
       estado: producto.estado,
     });
+    setErrores({});
     setModalOpen(true);
+  };
+
+  const actualizarNumerico = (
+    campo: 'stock_actual' | 'stock_minimo',
+    valor: string,
+  ) => {
+    const permitirCero = campo === 'stock_minimo' || !form.id_producto;
+    const resultado = sanitizarEntero(valor, permitirCero);
+    setForm((prev) => ({ ...prev, [campo]: resultado.valor }));
+    setErrores((prev) => ({ ...prev, [campo]: resultado.error }));
+  };
+
+  const validarFormulario = (): boolean => {
+    const nuevos: ErroresForm = {};
+
+    if (!form.nombre_producto.trim()) {
+      nuevos.nombre_producto = 'El nombre del producto es obligatorio.';
+    }
+
+    const precioNum = Number(form.precio);
+    if (form.precio === '' || Number.isNaN(precioNum) || precioNum < 0) {
+      nuevos.precio = 'El precio debe ser un número mayor o igual a 0.';
+    } else if (!/^\d+(\.\d{1,2})?$/.test(form.precio.trim())) {
+      nuevos.precio = 'El precio admite máximo 2 decimales.';
+    }
+
+    if (!form.id_producto) {
+      const stockActual = sanitizarEntero(form.stock_actual, true);
+      if (!stockActual.valido) nuevos.stock_actual = stockActual.error;
+    }
+
+    const stockMinimo = sanitizarEntero(form.stock_minimo, true);
+    if (!stockMinimo.valido) nuevos.stock_minimo = stockMinimo.error;
+
+    setErrores(nuevos);
+    return Object.keys(nuevos).length === 0;
+  };
+
+  const construirPayload = (): ProductoPayload => {
+    const payload: ProductoPayload = {
+      nombre_producto: form.nombre_producto.trim(),
+      precio: Number(Number(form.precio).toFixed(2)),
+      stock_minimo: Number(form.stock_minimo),
+      estado: form.estado,
+    };
+
+    if (!form.id_producto) {
+      payload.stock_actual = Number(form.stock_actual);
+    }
+
+    if (form.codigo_barras.trim()) {
+      payload.codigo_barras = form.codigo_barras.trim();
+    }
+
+    const idMarca = aNumero(form.id_marca);
+    if (idMarca !== undefined) payload.id_marca = idMarca;
+
+    const idLinea = aNumero(form.id_linea);
+    if (idLinea !== undefined) payload.id_linea = idLinea;
+
+    return payload;
   };
 
   const guardar = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.nombre_producto.trim()) {
-      showToast('El nombre del producto es obligatorio.', 'error');
-      return;
-    }
-    if (form.precio === '' || Number.isNaN(Number(form.precio))) {
-      showToast('El precio debe ser un número válido.', 'error');
-      return;
-    }
-
-    const payload: ProductoPayload = {
-      nombre_producto: form.nombre_producto.trim(),
-      precio: Number(form.precio),
-      stock_actual: aNumero(form.stock_actual) ?? 0,
-      stock_minimo: aNumero(form.stock_minimo) ?? 0,
-      estado: form.estado,
-    };
-    if (form.codigo_barras.trim()) payload.codigo_barras = form.codigo_barras.trim();
-    const idMarca = aNumero(form.id_marca);
-    if (idMarca !== undefined) payload.id_marca = idMarca;
-    const idLinea = aNumero(form.id_linea);
-    if (idLinea !== undefined) payload.id_linea = idLinea;
+    if (!validarFormulario()) return;
 
     setSaving(true);
     try {
+      const payload = construirPayload();
       if (form.id_producto) {
         await productosService.update(form.id_producto, payload);
         showToast('Producto actualizado correctamente.');
@@ -150,7 +210,16 @@ export const Productos: React.FC = () => {
       setModalOpen(false);
       await cargar();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Error al guardar el producto.', 'error');
+      const mensaje =
+        error instanceof Error ? error.message : 'Error al guardar el producto.';
+      if (error instanceof ApiError && error.status === 409) {
+        if (mensaje.includes('código de barras')) {
+          setErrores((prev) => ({ ...prev, codigo_barras: mensaje }));
+        } else {
+          setErrores((prev) => ({ ...prev, nombre_producto: mensaje }));
+        }
+      }
+      showToast(mensaje, 'error');
     } finally {
       setSaving(false);
     }
@@ -166,6 +235,16 @@ export const Productos: React.FC = () => {
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Error al desactivar.', 'error');
     }
+  };
+
+  const alGuardarStock = (actualizado: Producto) => {
+    setProductos((prev) =>
+      prev.map((p) =>
+        p.id_producto === actualizado.id_producto ? { ...p, ...actualizado } : p,
+      ),
+    );
+    setProductoAjuste(null);
+    showToast('Stock actualizado correctamente.');
   };
 
   const filtrados = useMemo(() => {
@@ -198,11 +277,11 @@ export const Productos: React.FC = () => {
 
   const totalActivos = productos.filter((p) => p.estado).length;
   const totalBajoStock = productos.filter(
-    (p) => p.estado && Number(p.stock_actual) <= Number(p.stock_minimo)
+    (p) => p.estado && Number(p.stock_actual) <= Number(p.stock_minimo),
   ).length;
   const valorStock = productos.reduce(
     (acc, p) => acc + Number(p.precio) * Number(p.stock_actual),
-    0
+    0,
   );
 
   return (
@@ -379,6 +458,14 @@ export const Productos: React.FC = () => {
                         <div className={styles.rowActions}>
                           <button
                             type="button"
+                            className={`${styles.iconBtn} ${styles.iconBtnSuccess}`}
+                            title="Actualizar stock"
+                            onClick={() => setProductoAjuste(p)}
+                          >
+                            <RefreshCw size={15} />
+                          </button>
+                          <button
+                            type="button"
                             className={styles.iconBtn}
                             title="Editar"
                             onClick={() => abrirEditar(p)}
@@ -428,7 +515,12 @@ export const Productos: React.FC = () => {
             <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={() => setModalOpen(false)}>
               Cancelar
             </button>
-            <button type="submit" form="form-producto" className={`${styles.btn} ${styles.btnPrimary}`} disabled={saving}>
+            <button
+              type="submit"
+              form="form-producto"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              disabled={saving || hayErrores}
+            >
               {saving ? <Loader2 size={16} className={styles.spinner} /> : <Save size={16} />}
               {saving ? 'Guardando...' : 'Guardar'}
             </button>
@@ -442,12 +534,20 @@ export const Productos: React.FC = () => {
             </label>
             <input
               id="prod-nombre"
-              className={styles.input}
+              className={`${styles.input} ${errores.nombre_producto ? styles.inputError : ''}`}
               type="text"
               value={form.nombre_producto}
-              onChange={(e) => setForm((prev) => ({ ...prev, nombre_producto: e.target.value }))}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, nombre_producto: e.target.value }));
+                if (errores.nombre_producto) {
+                  setErrores((prev) => ({ ...prev, nombre_producto: undefined }));
+                }
+              }}
               placeholder="Ej: Cuaderno Espiral 100 hojas"
             />
+            {errores.nombre_producto && (
+              <span className={styles.fieldError}>{errores.nombre_producto}</span>
+            )}
           </div>
 
           <div className={styles.field}>
@@ -456,12 +556,20 @@ export const Productos: React.FC = () => {
             </label>
             <input
               id="prod-codigo"
-              className={styles.input}
+              className={`${styles.input} ${errores.codigo_barras ? styles.inputError : ''}`}
               type="text"
               value={form.codigo_barras}
-              onChange={(e) => setForm((prev) => ({ ...prev, codigo_barras: e.target.value }))}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, codigo_barras: e.target.value }));
+                if (errores.codigo_barras) {
+                  setErrores((prev) => ({ ...prev, codigo_barras: undefined }));
+                }
+              }}
               placeholder="Opcional"
             />
+            {errores.codigo_barras && (
+              <span className={styles.fieldError}>{errores.codigo_barras}</span>
+            )}
           </div>
 
           <div className={styles.field}>
@@ -470,14 +578,22 @@ export const Productos: React.FC = () => {
             </label>
             <input
               id="prod-precio"
-              className={styles.input}
+              className={`${styles.input} ${errores.precio ? styles.inputError : ''}`}
               type="number"
               min="0"
               step="0.01"
               value={form.precio}
-              onChange={(e) => setForm((prev) => ({ ...prev, precio: e.target.value }))}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, precio: e.target.value }));
+                if (errores.precio) {
+                  setErrores((prev) => ({ ...prev, precio: undefined }));
+                }
+              }}
               placeholder="0.00"
             />
+            {errores.precio && (
+              <span className={styles.fieldError}>{errores.precio}</span>
+            )}
           </div>
 
           <div className={styles.field}>
@@ -524,12 +640,23 @@ export const Productos: React.FC = () => {
             </label>
             <input
               id="prod-stock"
-              className={styles.input}
-              type="number"
-              min="0"
+              className={`${styles.input} ${errores.stock_actual ? styles.inputError : ''}`}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.stock_actual}
-              onChange={(e) => setForm((prev) => ({ ...prev, stock_actual: e.target.value }))}
+              placeholder="Mín. 0"
+              readOnly={Boolean(form.id_producto)}
+              onKeyDown={bloquearTeclasNoNumericas}
+              onChange={(e) => actualizarNumerico('stock_actual', e.target.value)}
+              aria-invalid={Boolean(errores.stock_actual)}
             />
+            {errores.stock_actual && (
+              <span className={styles.fieldError}>{errores.stock_actual}</span>
+            )}
+            {form.id_producto && (
+              <span className={styles.hint}>Usa «Actualizar stock» para modificar la cantidad.</span>
+            )}
           </div>
 
           <div className={styles.field}>
@@ -538,12 +665,19 @@ export const Productos: React.FC = () => {
             </label>
             <input
               id="prod-minimo"
-              className={styles.input}
-              type="number"
-              min="0"
+              className={`${styles.input} ${errores.stock_minimo ? styles.inputError : ''}`}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.stock_minimo}
-              onChange={(e) => setForm((prev) => ({ ...prev, stock_minimo: e.target.value }))}
+              placeholder="0"
+              onKeyDown={bloquearTeclasNoNumericas}
+              onChange={(e) => actualizarNumerico('stock_minimo', e.target.value)}
+              aria-invalid={Boolean(errores.stock_minimo)}
             />
+            {errores.stock_minimo && (
+              <span className={styles.fieldError}>{errores.stock_minimo}</span>
+            )}
           </div>
 
           <div className={styles.field}>
@@ -562,6 +696,12 @@ export const Productos: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <AjusteStockModal
+        producto={productoAjuste}
+        onClose={() => setProductoAjuste(null)}
+        onGuardado={alGuardarStock}
+      />
     </main>
   );
 };

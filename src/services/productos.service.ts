@@ -25,6 +25,14 @@ export interface ProductoPayload {
   estado?: boolean;
 }
 
+export type TipoAjusteStock = 'ENTRADA' | 'SALIDA' | 'FIJAR';
+
+export interface AjusteStockPayload {
+  tipo: TipoAjusteStock;
+  cantidad: number;
+  motivo?: string;
+}
+
 export const productosService = {
   getAll: (incluirInactivos = false) =>
     api.get<Producto[]>(`/productos?incluirInactivos=${incluirInactivos}`),
@@ -37,6 +45,9 @@ export const productosService = {
 
   update: (id: number, data: Partial<ProductoPayload>) =>
     api.patch<Producto>(`/productos/${id}`, data),
+
+  ajustarStock: (id: number, data: AjusteStockPayload) =>
+    api.patch<Producto>(`/productos/${id}/stock`, data),
 
   remove: (id: number) => api.delete<Producto>(`/productos/${id}`),
 };

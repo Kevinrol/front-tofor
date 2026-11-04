@@ -23,6 +23,7 @@ import {
   ventasService,
   Venta,
   VentaPayload,
+  VentaUpdatePayload,
   TipoVenta,
   MetodoPago,
   EstadoPagoVenta,
@@ -139,23 +140,15 @@ export const Ventas: React.FC = () => {
     [form.detalles, productos]
   );
 
-  const clienteSeleccionado = useMemo(
-    () => clientes.find((c) => String(c.id_cliente) === form.id_cliente),
-    [clientes, form.id_cliente]
-  );
-
-  // ponytail: 10% wholesale auto-discount heuristic, replace with per-client column if rates diverge
-  useEffect(() => {
-    if (!editando && clienteSeleccionado?.tipo_cliente === 'Mayorista') {
-      setForm((prev) => ({
-        ...prev,
-        monto_descuento: (subtotalEstimado * 0.1).toFixed(2),
-      }));
-    }
-  }, [clienteSeleccionado?.id_cliente, clienteSeleccionado?.tipo_cliente, subtotalEstimado, editando]);
-
   const descuentoNum = Math.max(0, Number(form.monto_descuento) || 0);
   const totalEstimado = Math.max(0, subtotalEstimado - descuentoNum);
+
+  const subtotalEdicion = editando
+    ? Number(editando.monto_total ?? 0) + Number(editando.monto_descuento ?? 0)
+    : 0;
+  const totalEdicion = Math.max(0, subtotalEdicion - descuentoNum);
+  const efectivoEdicion = Number(form.monto_efectivo) || 0;
+  const cambioEdicion = efectivoEdicion - totalEdicion;
 
   const agregarPorBusqueda = (q: string) => {
     const term = q.trim().toLowerCase();
@@ -211,6 +204,11 @@ export const Ventas: React.FC = () => {
       tipo_venta: venta.tipo_venta as TipoVenta,
       metodo_pago: venta.metodo_pago as MetodoPago,
       estado_pago: venta.estado_pago as EstadoPagoVenta,
+      monto_descuento: String(Number(venta.monto_descuento ?? 0)),
+      monto_efectivo:
+        venta.monto_efectivo !== null && venta.monto_efectivo !== undefined
+          ? String(venta.monto_efectivo)
+          : '',
       detalles: [{ ...LINEA_VACIA }],
     });
     setModalOpen(true);
@@ -244,11 +242,35 @@ export const Ventas: React.FC = () => {
     setSaving(true);
     try {
       if (editando?.id_venta != null) {
-        const payload: { id_cliente?: number; estado_pago?: EstadoPagoVenta } = {
+        if (descuentoNum > subtotalEdicion + 0.001) {
+          showToast('El descuento no puede superar el subtotal de la venta.', 'error');
+          setSaving(false);
+          return;
+        }
+
+        const payload: VentaUpdatePayload = {
           estado_pago: form.estado_pago,
+          monto_descuento: descuentoNum,
         };
+
         const idCliente = aNumero(form.id_cliente);
-        if (idCliente !== undefined) payload.id_cliente = idCliente;
+        payload.id_cliente = idCliente ?? null;
+
+        if (editando.metodo_pago === 'Efectivo') {
+          const efectivo = aNumero(form.monto_efectivo);
+          if (efectivo === undefined) {
+            showToast('Indica el monto entregado en efectivo.', 'error');
+            setSaving(false);
+            return;
+          }
+          if (efectivo < totalEdicion) {
+            showToast('El monto entregado es menor al nuevo total de la venta.', 'error');
+            setSaving(false);
+            return;
+          }
+          payload.monto_efectivo = efectivo;
+        }
+
         await ventasService.update(editando.id_venta, payload);
         showToast('Venta actualizada correctamente.');
       } else {
@@ -537,8 +559,13 @@ export const Ventas: React.FC = () => {
                             <button
                               type="button"
                               className={styles.iconBtn}
-                              title="Editar pago / cliente"
+                              title={
+                                v.estado_pago === 'Anulado'
+                                  ? 'No se puede editar una venta anulada'
+                                  : 'Editar venta'
+                              }
                               onClick={() => abrirEditar(v)}
+                              disabled={v.estado_pago === 'Anulado'}
                             >
                               <Pencil size={15} />
                             </button>
@@ -598,7 +625,10 @@ export const Ventas: React.FC = () => {
         {editando ? (
           <form id="form-venta" onSubmit={guardar} className={styles.formGrid} noValidate>
             <div className={`${styles.field} ${styles.formGridFull}`}>
-              <span className={styles.hint}>Solo se puede actualizar el cliente y el estado de pago.</span>
+              <span className={styles.hint}>
+                Puedes actualizar cliente, descuento, estado de pago y monto entregado. El total y el
+                vuelto se recalculan automáticamente.
+              </span>
             </div>
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-cliente">
@@ -619,6 +649,21 @@ export const Ventas: React.FC = () => {
               </select>
             </div>
             <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="venta-descuento-editar">
+                Descuento (Bs)
+              </label>
+              <input
+                id="venta-descuento-editar"
+                className={styles.input}
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.monto_descuento}
+                onChange={(e) => setForm((prev) => ({ ...prev, monto_descuento: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+            <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-estado">
                 Estado de pago
               </label>
@@ -630,12 +675,37 @@ export const Ventas: React.FC = () => {
                   setForm((prev) => ({ ...prev, estado_pago: e.target.value as EstadoPagoVenta }))
                 }
               >
-                {ESTADOS.map((estado) => (
+                {ESTADOS.filter((estado) => estado !== 'Anulado').map((estado) => (
                   <option key={estado} value={estado}>
                     {estado}
                   </option>
                 ))}
               </select>
+            </div>
+            {editando.metodo_pago === 'Efectivo' && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="venta-efectivo-editar">
+                  Monto entregado (Bs)
+                </label>
+                <input
+                  id="venta-efectivo-editar"
+                  className={styles.input}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.monto_efectivo}
+                  onChange={(e) => setForm((prev) => ({ ...prev, monto_efectivo: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+            <div className={`${styles.field} ${styles.formGridFull}`}>
+              <span className={styles.hint}>
+                Subtotal: {formatearMoneda(subtotalEdicion)} · Total: {formatearMoneda(totalEdicion)}
+                {editando.metodo_pago === 'Efectivo'
+                  ? ` · Vuelto: ${formatearMoneda(cambioEdicion)}`
+                  : ''}
+              </span>
             </div>
           </form>
         ) : (
@@ -681,7 +751,7 @@ export const Ventas: React.FC = () => {
 
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-descuento">
-                Descuento (Bs) {clienteSeleccionado?.tipo_cliente === 'Mayorista' && '· Mayorista 10% auto'}
+                Descuento (Bs)
               </label>
               <input
                 id="venta-descuento"
