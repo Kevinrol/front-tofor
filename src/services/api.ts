@@ -21,6 +21,17 @@ function buildHeaders(): Record<string, string> {
   return headers;
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 /**
  * Ejecuta una petición HTTP y normaliza la respuesta.
  * En caso de error intenta extraer el mensaje enviado por NestJS.
@@ -34,14 +45,20 @@ async function request<T>(method: string, endpoint: string, data?: unknown): Pro
 
   if (!response.ok) {
     let detail = '';
+    let body: unknown = null;
     try {
-      const body = await response.json();
-      if (Array.isArray(body?.message)) detail = body.message.join(', ');
-      else if (typeof body?.message === 'string') detail = body.message;
+      body = await response.json();
+      const mensaje = (body as { message?: string | string[] })?.message;
+      if (Array.isArray(mensaje)) detail = mensaje.join(', ');
+      else if (typeof mensaje === 'string') detail = mensaje;
     } catch {
       // La respuesta no contenía JSON; se usa el mensaje genérico.
     }
-    throw new Error(detail || `${method} ${endpoint} — ${response.status}`);
+    throw new ApiError(
+      detail || `${method} ${endpoint} — ${response.status}`,
+      response.status,
+      body,
+    );
   }
 
   if (response.status === 204) return undefined as T;
