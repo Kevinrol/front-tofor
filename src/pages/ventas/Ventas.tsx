@@ -68,6 +68,9 @@ const TIPOS_VENTA: TipoVenta[] = ['Contado', 'Credito'];
 const METODOS: MetodoPago[] = ['Efectivo', 'QR'];
 const ESTADOS: EstadoPagoVenta[] = ['Pagado', 'Pendiente', 'Anulado'];
 
+const MENSAJE_CREDITO_MAYORISTA =
+  'Las ventas a crédito solo están permitidas para clientes mayoristas registrados.';
+
 type FiltroEstado = 'all' | EstadoPagoVenta;
 
 const POR_PAGINA_INICIAL = 5;
@@ -143,6 +146,25 @@ export const Ventas: React.FC = () => {
   const descuentoNum = Math.max(0, Number(form.monto_descuento) || 0);
   const totalEstimado = Math.max(0, subtotalEstimado - descuentoNum);
 
+  const clienteSeleccionado = useMemo(
+    () => clientes.find((c) => String(c.id_cliente) === form.id_cliente) ?? null,
+    [clientes, form.id_cliente]
+  );
+
+  const esClienteMayorista = useMemo(() => {
+    if (clienteSeleccionado) {
+      return clienteSeleccionado.tipo_cliente === 'Mayorista';
+    }
+    if (
+      editando &&
+      form.id_cliente !== '' &&
+      form.id_cliente === String(editando.id_cliente)
+    ) {
+      return editando.tipo_cliente === 'Mayorista';
+    }
+    return false;
+  }, [clienteSeleccionado, editando, form.id_cliente]);
+
   const subtotalEdicion = editando
     ? Number(editando.monto_total ?? 0) + Number(editando.monto_descuento ?? 0)
     : 0;
@@ -214,6 +236,20 @@ export const Ventas: React.FC = () => {
     setModalOpen(true);
   };
 
+  const cambiarCliente = (idCliente: string) => {
+    const cliente = clientes.find((c) => String(c.id_cliente) === idCliente) ?? null;
+    const mayorista = cliente?.tipo_cliente === 'Mayorista';
+    setForm((prev) => ({
+      ...prev,
+      id_cliente: idCliente,
+      monto_descuento: '0',
+      // Los clientes no mayoristas solo pueden comprar al contado y pagado.
+      ...(!editando && !mayorista
+        ? { tipo_venta: 'Contado' as TipoVenta, estado_pago: 'Pagado' as EstadoPagoVenta }
+        : {}),
+    }));
+  };
+
   const verDetalle = async (venta: Venta) => {
     if (venta.id_venta == null) return;
     try {
@@ -244,6 +280,12 @@ export const Ventas: React.FC = () => {
       if (editando?.id_venta != null) {
         if (descuentoNum > subtotalEdicion + 0.001) {
           showToast('El descuento no puede superar el subtotal de la venta.', 'error');
+          setSaving(false);
+          return;
+        }
+
+        if (editando.tipo_venta === 'Credito' && !esClienteMayorista) {
+          showToast(MENSAJE_CREDITO_MAYORISTA, 'error');
           setSaving(false);
           return;
         }
@@ -298,7 +340,7 @@ export const Ventas: React.FC = () => {
 
         const payload: VentaPayload = {
           id_usuario: idUsuario,
-          tipo_venta: form.tipo_venta,
+          tipo_venta: esClienteMayorista ? form.tipo_venta : 'Contado',
           metodo_pago: form.metodo_pago,
           monto_descuento: descuentoNum,
           detalles,
@@ -320,7 +362,7 @@ export const Ventas: React.FC = () => {
           }
           payload.monto_efectivo = efectivo;
         } else {
-          payload.estado_pago = form.estado_pago;
+          payload.estado_pago = esClienteMayorista ? form.estado_pago : 'Pagado';
         }
 
         const creada = await ventasService.create(payload);
@@ -638,15 +680,28 @@ export const Ventas: React.FC = () => {
                 id="venta-cliente"
                 className={styles.select}
                 value={form.id_cliente}
-                onChange={(e) => setForm((prev) => ({ ...prev, id_cliente: e.target.value }))}
+                onChange={(e) => cambiarCliente(e.target.value)}
               >
-                <option value="">Venta general</option>
+                <option value="" disabled={editando.tipo_venta === 'Credito'}>
+                  Venta general
+                </option>
                 {clientes.map((c) => (
-                  <option key={c.id_cliente} value={c.id_cliente}>
-                    {c.razon_social_nombre}
+                  <option
+                    key={c.id_cliente}
+                    value={c.id_cliente}
+                    disabled={
+                      editando.tipo_venta === 'Credito' && c.tipo_cliente !== 'Mayorista'
+                    }
+                  >
+                    {c.razon_social_nombre} ({c.tipo_cliente})
                   </option>
                 ))}
               </select>
+              {editando.tipo_venta === 'Credito' && (
+                <span className={styles.hint}>
+                  Esta venta es a crédito: solo puede asociarse a un cliente Mayorista.
+                </span>
+              )}
             </div>
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-descuento-editar">
@@ -738,7 +793,7 @@ export const Ventas: React.FC = () => {
                 id="venta-cliente-nuevo"
                 className={styles.select}
                 value={form.id_cliente}
-                onChange={(e) => setForm((prev) => ({ ...prev, id_cliente: e.target.value, monto_descuento: '0' }))}
+                onChange={(e) => cambiarCliente(e.target.value)}
               >
                 <option value="">Venta general (Minorista ocasional)</option>
                 {clientes.map((c) => (
@@ -747,6 +802,12 @@ export const Ventas: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {!esClienteMayorista && (
+                <span className={styles.hint}>
+                  Venta al contado y pagada: el crédito solo está disponible para clientes
+                  Mayorista.
+                </span>
+              )}
             </div>
 
             <div className={styles.field}>
@@ -765,23 +826,27 @@ export const Ventas: React.FC = () => {
               />
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="venta-tipo">
-                Tipo de venta
-              </label>
-              <select
-                id="venta-tipo"
-                className={styles.select}
-                value={form.tipo_venta}
-                onChange={(e) => setForm((prev) => ({ ...prev, tipo_venta: e.target.value as TipoVenta }))}
-              >
-                {TIPOS_VENTA.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {esClienteMayorista && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="venta-tipo">
+                  Tipo de venta
+                </label>
+                <select
+                  id="venta-tipo"
+                  className={styles.select}
+                  value={form.tipo_venta}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, tipo_venta: e.target.value as TipoVenta }))
+                  }
+                >
+                  {TIPOS_VENTA.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-metodo">
@@ -818,7 +883,7 @@ export const Ventas: React.FC = () => {
                 />
                 <span className={styles.hint}>Vuelto: {formatearMoneda((Number(form.monto_efectivo) || 0) - totalEstimado)}</span>
               </div>
-            ) : (
+            ) : esClienteMayorista ? (
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="venta-estado-nuevo">
                   Estado de pago
@@ -837,6 +902,11 @@ export const Ventas: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+            ) : (
+              <div className={styles.field}>
+                <span className={styles.fieldLabel}>Estado de pago</span>
+                <span className={styles.hint}>Pagado (venta al contado).</span>
               </div>
             )}
 
