@@ -342,6 +342,36 @@ export const PedidosProveedor: React.FC = () => {
           return;
         }
 
+        // Validar cada línea de producto agregada
+        for (let i = 0; i < form.detalles.length; i++) {
+          const l = form.detalles[i];
+          if (!l.id_producto) continue;
+          const cant = aNumero(l.cantidad_solicitada);
+          const prec = aNumero(l.precio_unitario_compra);
+          const desc = aNumero(l.porcentaje_descuento) ?? 0;
+
+          if (cant === undefined || cant <= 0) {
+            showToast(`Línea #${i + 1}: La cantidad solicitada debe ser mayor a 0.`, 'error');
+            setSaving(false);
+            return;
+          }
+          if (prec === undefined || prec < 0) {
+            showToast(`Línea #${i + 1}: El precio unitario de compra no puede ser negativo ni estar vacío.`, 'error');
+            setSaving(false);
+            return;
+          }
+          if (desc < 0 || desc > 100) {
+            showToast(`Línea #${i + 1}: El porcentaje de descuento debe estar entre 0% y 100%.`, 'error');
+            setSaving(false);
+            return;
+          }
+          if (!l.unidad_venta.trim()) {
+            showToast(`Línea #${i + 1}: Selecciona una unidad de venta.`, 'error');
+            setSaving(false);
+            return;
+          }
+        }
+
         const detalles = form.detalles
           .map((linea) => ({
             id_producto: aNumero(linea.id_producto),
@@ -872,6 +902,9 @@ export const PedidosProveedor: React.FC = () => {
                     min="1"
                     value={linea.cantidad_solicitada}
                     onChange={(e) => actualizarLinea(index, { cantidad_solicitada: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                    }}
                   />
                   <select
                     className={styles.select}
@@ -892,6 +925,9 @@ export const PedidosProveedor: React.FC = () => {
                     placeholder="0.00"
                     value={linea.precio_unitario_compra}
                     onChange={(e) => actualizarLinea(index, { precio_unitario_compra: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                    }}
                   />
                   <input
                     className={styles.input}
@@ -900,6 +936,9 @@ export const PedidosProveedor: React.FC = () => {
                     max="100"
                     value={linea.porcentaje_descuento}
                     onChange={(e) => actualizarLinea(index, { porcentaje_descuento: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                    }}
                   />
                   <span className={styles.money}>{formatearMoneda(subtotalLinea(linea))}</span>
                   <button

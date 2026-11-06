@@ -299,6 +299,25 @@ export const ComprasProveedor: React.FC = () => {
           return;
         }
 
+        // Validar cada línea de producto agregada
+        for (let i = 0; i < form.detalles.length; i++) {
+          const l = form.detalles[i];
+          if (!l.id_producto) continue;
+          const cant = aNumero(l.cantidad_recibida);
+          const costo = aNumero(l.precio_costo_unitario);
+
+          if (cant === undefined || cant <= 0) {
+            showToast(`Línea #${i + 1}: La cantidad recibida debe ser mayor a 0.`, 'error');
+            setSaving(false);
+            return;
+          }
+          if (costo === undefined || costo < 0) {
+            showToast(`Línea #${i + 1}: El precio de costo unitario no puede ser negativo ni estar vacío.`, 'error');
+            setSaving(false);
+            return;
+          }
+        }
+
         const detalles = form.detalles
           .map((linea) => ({
             id_producto: aNumero(linea.id_producto),
@@ -755,6 +774,9 @@ export const ComprasProveedor: React.FC = () => {
                       min="1"
                       value={linea.cantidad_recibida}
                       onChange={(e) => actualizarLinea(index, { cantidad_recibida: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                      }}
                     />
                     <input
                       className={styles.input}
@@ -764,6 +786,9 @@ export const ComprasProveedor: React.FC = () => {
                       placeholder="0.00"
                       value={linea.precio_costo_unitario}
                       onChange={(e) => actualizarLinea(index, { precio_costo_unitario: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                      }}
                     />
                     <span className={styles.money}>{formatearMoneda(subtotal)}</span>
                     <button

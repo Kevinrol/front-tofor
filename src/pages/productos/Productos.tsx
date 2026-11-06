@@ -12,12 +12,14 @@ import {
   DollarSign,
   Layers,
   RefreshCw,
+  ScanBarcode,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
 import { Modal } from '../../components/Modal/Modal';
 import { Toast } from '../../components/Toast/Toast';
 import { Paginador } from '../../components/Paginador/Paginador';
 import { AjusteStockModal } from '../../components/AjusteStockModal/AjusteStockModal';
+import { LectorCodigoBarrasModal } from '../../components/LectorCodigoBarrasModal/LectorCodigoBarrasModal';
 import { useToast } from '../../hooks/useToast';
 import { ApiError } from '../../services/api';
 import { productosService, Producto, ProductoPayload } from '../../services/productos.service';
@@ -71,6 +73,7 @@ export const Productos: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [errores, setErrores] = useState<ErroresForm>({});
   const [productoAjuste, setProductoAjuste] = useState<Producto | null>(null);
@@ -147,6 +150,12 @@ export const Productos: React.FC = () => {
 
     if (!form.nombre_producto.trim()) {
       nuevos.nombre_producto = 'El nombre del producto es obligatorio.';
+    }
+
+    if (!form.id_producto && !form.codigo_barras.trim()) {
+      nuevos.codigo_barras = 'El código de barras es obligatorio para registrar un producto.';
+    } else if (form.codigo_barras.trim().length > 100) {
+      nuevos.codigo_barras = 'El código de barras no puede exceder 100 caracteres.';
     }
 
     const precioNum = Number(form.precio);
@@ -551,22 +560,57 @@ export const Productos: React.FC = () => {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="prod-codigo">
-              Código de barras
-            </label>
-            <input
-              id="prod-codigo"
-              className={`${styles.input} ${errores.codigo_barras ? styles.inputError : ''}`}
-              type="text"
-              value={form.codigo_barras}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, codigo_barras: e.target.value }));
-                if (errores.codigo_barras) {
-                  setErrores((prev) => ({ ...prev, codigo_barras: undefined }));
-                }
-              }}
-              placeholder="Opcional"
-            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <label className={styles.fieldLabel} htmlFor="prod-codigo" style={{ marginBottom: 0 }}>
+                Código de barras {!form.id_producto && <span className={styles.requiredMark}>*</span>}
+              </label>
+              {!form.id_producto && (
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--color-primary, #fd3706)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  <ScanBarcode size={14} /> Escanear con cámara
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                id="prod-codigo"
+                className={`${styles.input} ${errores.codigo_barras ? styles.inputError : ''}`}
+                type="text"
+                value={form.codigo_barras}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, codigo_barras: e.target.value }));
+                  if (errores.codigo_barras) {
+                    setErrores((prev) => ({ ...prev, codigo_barras: undefined }));
+                  }
+                }}
+                placeholder={!form.id_producto ? 'Ej: 7770001000012 o escanee el código' : 'Opcional'}
+              />
+              {!form.id_producto && (
+                <button
+                  type="button"
+                  title="Escanear con cámara (ZXing)"
+                  className={`${styles.btn} ${styles.btnGhost}`}
+                  onClick={() => setScannerOpen(true)}
+                  style={{ flexShrink: 0, padding: '0 12px' }}
+                >
+                  <ScanBarcode size={18} />
+                </button>
+              )}
+            </div>
             {errores.codigo_barras && (
               <span className={styles.fieldError}>{errores.codigo_barras}</span>
             )}
@@ -701,6 +745,16 @@ export const Productos: React.FC = () => {
         producto={productoAjuste}
         onClose={() => setProductoAjuste(null)}
         onGuardado={alGuardarStock}
+      />
+
+      <LectorCodigoBarrasModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={(codigo) => {
+          setForm((prev) => ({ ...prev, codigo_barras: codigo }));
+          setErrores((prev) => ({ ...prev, codigo_barras: undefined }));
+          showToast(`Código de barras escaneado: ${codigo}`);
+        }}
       />
     </main>
   );

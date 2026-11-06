@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Users,
-  UserRound,
   Store,
   Plus,
   Pencil,
@@ -13,6 +12,7 @@ import {
   MapPin,
   CheckCircle2,
   Receipt,
+  UserX,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
 import { Modal } from '../../components/Modal/Modal';
@@ -47,9 +47,9 @@ const FORM_VACIO: FormState = {
   estado: true,
 };
 
-type FiltroTipo = 'all' | TipoCliente | 'inactive';
+type FiltroTipo = 'all' | 'active' | 'inactive';
 
-const TIPOS: TipoCliente[] = ['Mayorista', 'Minorista', 'General'];
+const TIPOS_REGISTRO: TipoCliente[] = ['Mayorista'];
 
 const POR_PAGINA_INICIAL = 5;
 
@@ -184,10 +184,10 @@ export const Clientes: React.FC = () => {
         c.nit_ci.toLowerCase().includes(q) ||
         (c.telefono ?? '').toLowerCase().includes(q);
 
-      const porTipo =
-        filtro === 'all' ? true : filtro === 'inactive' ? !c.estado : c.tipo_cliente === filtro;
+      const porEstado =
+        filtro === 'all' ? true : filtro === 'active' ? c.estado : !c.estado;
 
-      return coincide && porTipo;
+      return coincide && porEstado;
     });
   }, [clientes, search, filtro]);
 
@@ -195,9 +195,8 @@ export const Clientes: React.FC = () => {
   const paginaActual = Math.min(pagina, totalPaginas);
   const visibles = filtrados.slice((paginaActual - 1) * porPagina, paginaActual * porPagina);
 
-  const totalMayoristas = clientes.filter((c) => c.tipo_cliente === 'Mayorista').length;
-  const totalMinoristas = clientes.filter((c) => c.tipo_cliente === 'Minorista').length;
   const totalActivos = clientes.filter((c) => c.estado).length;
+  const totalInactivos = clientes.filter((c) => !c.estado).length;
 
   return (
     <main className={styles.scrollArea}>
@@ -212,7 +211,7 @@ export const Clientes: React.FC = () => {
             </span>
           </div>
           <p className={styles.subtitle}>
-            Registro de clientes mayoristas, minoristas y generales para ventas, comprobantes y
+            Registro de clientes mayoristas frecuentes para ventas, comprobantes y
             seguimiento comercial.
           </p>
         </div>
@@ -225,33 +224,13 @@ export const Clientes: React.FC = () => {
 
       <section className={styles.kpiGrid}>
         <div className={styles.kpiCard}>
-          <div className={`${styles.kpiIcon} ${styles.accentOrange}`}>
-            <Users size={22} />
-          </div>
-          <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Clientes Totales</span>
-            <span className={styles.kpiValue}>{clientes.length}</span>
-            <span className={styles.kpiSubtext}>{totalActivos} activos</span>
-          </div>
-        </div>
-        <div className={styles.kpiCard}>
           <div className={`${styles.kpiIcon} ${styles.accentBlue}`}>
             <Store size={22} />
           </div>
           <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Mayoristas</span>
-            <span className={styles.kpiValue}>{totalMayoristas}</span>
-            <span className={styles.kpiSubtext}>Compras al por mayor</span>
-          </div>
-        </div>
-        <div className={styles.kpiCard}>
-          <div className={`${styles.kpiIcon} ${styles.accentPurple}`}>
-            <UserRound size={22} />
-          </div>
-          <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Minoristas</span>
-            <span className={styles.kpiValue}>{totalMinoristas}</span>
-            <span className={styles.kpiSubtext}>Venta al detalle</span>
+            <span className={styles.kpiLabel}>Clientes Mayoristas</span>
+            <span className={styles.kpiValue}>{clientes.length}</span>
+            <span className={styles.kpiSubtext}>Cartera registrada</span>
           </div>
         </div>
         <div className={styles.kpiCard}>
@@ -262,6 +241,16 @@ export const Clientes: React.FC = () => {
             <span className={styles.kpiLabel}>Habilitados</span>
             <span className={styles.kpiValue}>{totalActivos}</span>
             <span className={styles.kpiSubtext}>Listos para facturar</span>
+          </div>
+        </div>
+        <div className={styles.kpiCard}>
+          <div className={`${styles.kpiIcon} ${styles.accentOrange}`}>
+            <UserX size={22} />
+          </div>
+          <div className={styles.kpiContent}>
+            <span className={styles.kpiLabel}>Inactivos</span>
+            <span className={styles.kpiValue}>{totalInactivos}</span>
+            <span className={styles.kpiSubtext}>Fuera de cartera</span>
           </div>
         </div>
       </section>
@@ -292,16 +281,13 @@ export const Clientes: React.FC = () => {
             >
               Todos
             </button>
-            {TIPOS.map((tipo) => (
-              <button
-                key={tipo}
-                type="button"
-                className={`${styles.filterChip} ${filtro === tipo ? styles.filterChipActive : ''}`}
-                onClick={() => setFiltro(tipo)}
-              >
-                {tipo}
-              </button>
-            ))}
+            <button
+              type="button"
+              className={`${styles.filterChip} ${filtro === 'active' ? styles.filterChipActive : ''}`}
+              onClick={() => setFiltro('active')}
+            >
+              Activos
+            </button>
             <button
               type="button"
               className={`${styles.filterChip} ${filtro === 'inactive' ? styles.filterChipActive : ''}`}
@@ -470,7 +456,7 @@ export const Clientes: React.FC = () => {
               value={form.tipo_cliente}
               onChange={(e) => setForm((prev) => ({ ...prev, tipo_cliente: e.target.value as TipoCliente }))}
             >
-              {TIPOS.map((tipo) => (
+              {TIPOS_REGISTRO.map((tipo) => (
                 <option key={tipo} value={tipo}>
                   {tipo}
                 </option>
