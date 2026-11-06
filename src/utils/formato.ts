@@ -49,3 +49,13 @@ export const aDateInput = (valor: string | Date | null | undefined): string => {
   if (Number.isNaN(fecha.getTime())) return '';
   return fecha.toISOString().slice(0, 10);
 };
+
+/** Devuelve la fecha mínima de entrega estimada en formato YYYY-MM-DD (por defecto, mañana). */
+export const obtenerFechaMinimaEntrega = (diasAdicionales = 1): string => {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() + diasAdicionales);
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+};

@@ -140,6 +140,26 @@ export const Ventas: React.FC = () => {
     [form.detalles, productos]
   );
 
+  const clienteSeleccionado = useMemo(() => {
+    if (!form.id_cliente) return null;
+    return clientes.find((c) => String(c.id_cliente) === String(form.id_cliente)) ?? null;
+  }, [form.id_cliente, clientes]);
+
+  const esClienteMayorista = clienteSeleccionado?.tipo_cliente === 'Mayorista';
+
+  const cambiarClienteNuevo = (nuevoIdCliente: string) => {
+    const cli = clientes.find((c) => String(c.id_cliente) === String(nuevoIdCliente));
+    const esMayorista = cli?.tipo_cliente === 'Mayorista';
+
+    setForm((prev) => ({
+      ...prev,
+      id_cliente: nuevoIdCliente,
+      monto_descuento: '0',
+      tipo_venta: esMayorista ? prev.tipo_venta : 'Contado',
+      estado_pago: esMayorista ? prev.estado_pago : 'Pagado',
+    }));
+  };
+
   const descuentoNum = Math.max(0, Number(form.monto_descuento) || 0);
   const totalEstimado = Math.max(0, subtotalEstimado - descuentoNum);
 
@@ -256,6 +276,18 @@ export const Ventas: React.FC = () => {
         const idCliente = aNumero(form.id_cliente);
         payload.id_cliente = idCliente ?? null;
 
+        if (editando.tipo_venta === 'Credito') {
+          const cli = clientes.find((c) => c.id_cliente === idCliente);
+          if (!cli || cli.tipo_cliente !== 'Mayorista') {
+            showToast(
+              'Una venta a crédito solo puede estar asociada a un cliente Mayorista registrado.',
+              'error'
+            );
+            setSaving(false);
+            return;
+          }
+        }
+
         if (editando.metodo_pago === 'Efectivo') {
           const efectivo = aNumero(form.monto_efectivo);
           if (efectivo === undefined) {
@@ -296,6 +328,15 @@ export const Ventas: React.FC = () => {
           return;
         }
 
+        if (form.tipo_venta === 'Credito' && !esClienteMayorista) {
+          showToast(
+            'Las ventas a crédito solo están permitidas para clientes mayoristas registrados.',
+            'error'
+          );
+          setSaving(false);
+          return;
+        }
+
         const payload: VentaPayload = {
           id_usuario: idUsuario,
           tipo_venta: form.tipo_venta,
@@ -306,7 +347,12 @@ export const Ventas: React.FC = () => {
         const idCliente = aNumero(form.id_cliente);
         if (idCliente !== undefined) payload.id_cliente = idCliente;
 
-        if (form.metodo_pago === 'Efectivo') {
+        if (form.tipo_venta === 'Credito') {
+          payload.estado_pago = form.estado_pago || 'Pendiente';
+          if (form.monto_efectivo && form.monto_efectivo.trim() !== '') {
+            payload.monto_efectivo = aNumero(form.monto_efectivo);
+          }
+        } else if (form.metodo_pago === 'Efectivo') {
           const efectivo = aNumero(form.monto_efectivo);
           if (efectivo === undefined) {
             showToast('Indica el monto entregado en efectivo.', 'error');
@@ -319,8 +365,9 @@ export const Ventas: React.FC = () => {
             return;
           }
           payload.monto_efectivo = efectivo;
+          payload.estado_pago = 'Pagado';
         } else {
-          payload.estado_pago = form.estado_pago;
+          payload.estado_pago = form.estado_pago || 'Pagado';
         }
 
         const creada = await ventasService.create(payload);
@@ -632,7 +679,7 @@ export const Ventas: React.FC = () => {
             </div>
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-cliente">
-                Cliente
+                Cliente {editando.tipo_venta === 'Credito' ? '(Solo Mayoristas por ser venta a Crédito)' : ''}
               </label>
               <select
                 id="venta-cliente"
@@ -640,12 +687,16 @@ export const Ventas: React.FC = () => {
                 value={form.id_cliente}
                 onChange={(e) => setForm((prev) => ({ ...prev, id_cliente: e.target.value }))}
               >
-                <option value="">Venta general</option>
-                {clientes.map((c) => (
-                  <option key={c.id_cliente} value={c.id_cliente}>
-                    {c.razon_social_nombre}
-                  </option>
-                ))}
+                {editando.tipo_venta !== 'Credito' && (
+                  <option value="">Venta general</option>
+                )}
+                {clientes
+                  .filter((c) => (editando.tipo_venta === 'Credito' ? c.tipo_cliente === 'Mayorista' : true))
+                  .map((c) => (
+                    <option key={c.id_cliente} value={c.id_cliente}>
+                      {c.razon_social_nombre} ({c.tipo_cliente})
+                    </option>
+                  ))}
               </select>
             </div>
             <div className={styles.field}>
@@ -738,7 +789,7 @@ export const Ventas: React.FC = () => {
                 id="venta-cliente-nuevo"
                 className={styles.select}
                 value={form.id_cliente}
-                onChange={(e) => setForm((prev) => ({ ...prev, id_cliente: e.target.value, monto_descuento: '0' }))}
+                onChange={(e) => cambiarClienteNuevo(e.target.value)}
               >
                 <option value="">Venta general (Minorista ocasional)</option>
                 {clientes.map((c) => (
@@ -747,6 +798,8 @@ export const Ventas: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <div style={{ marginTop: '4px', fontSize: '12px', color: esClienteMayorista ? '#059669' : '#6b7280' }}>
+              </div>
             </div>
 
             <div className={styles.field}>
@@ -765,23 +818,32 @@ export const Ventas: React.FC = () => {
               />
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="venta-tipo">
-                Tipo de venta
-              </label>
-              <select
-                id="venta-tipo"
-                className={styles.select}
-                value={form.tipo_venta}
-                onChange={(e) => setForm((prev) => ({ ...prev, tipo_venta: e.target.value as TipoVenta }))}
-              >
-                {TIPOS_VENTA.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {esClienteMayorista && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="venta-tipo">
+                  Tipo de venta
+                </label>
+                <select
+                  id="venta-tipo"
+                  className={styles.select}
+                  value={form.tipo_venta}
+                  onChange={(e) => {
+                    const nuevoTipo = e.target.value as TipoVenta;
+                    setForm((prev) => ({
+                      ...prev,
+                      tipo_venta: nuevoTipo,
+                      estado_pago: nuevoTipo === 'Credito' ? 'Pendiente' : 'Pagado',
+                    }));
+                  }}
+                >
+                  {TIPOS_VENTA.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-metodo">
@@ -801,7 +863,27 @@ export const Ventas: React.FC = () => {
               </select>
             </div>
 
-            {form.metodo_pago === 'Efectivo' ? (
+            {form.tipo_venta === 'Credito' ? (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="venta-estado-nuevo">
+                  Estado de pago (Venta a Crédito)
+                </label>
+                <select
+                  id="venta-estado-nuevo"
+                  className={styles.select}
+                  value={form.estado_pago}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, estado_pago: e.target.value as EstadoPagoVenta }))
+                  }
+                >
+                  {ESTADOS.filter((e) => e !== 'Anulado').map((estado) => (
+                    <option key={estado} value={estado}>
+                      {estado}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : form.metodo_pago === 'Efectivo' ? (
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="venta-efectivo">
                   Monto entregado (Bs)

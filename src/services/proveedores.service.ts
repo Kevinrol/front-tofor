@@ -10,6 +10,8 @@ export interface Proveedor {
   estado: boolean;
   marcas: string[];
   lineas_productos: string[];
+  ids_marcas?: number[];
+  ids_lineas?: number[];
 }
 
 export interface Marca {

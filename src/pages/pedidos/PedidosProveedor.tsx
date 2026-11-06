@@ -31,7 +31,12 @@ import { productosService, Producto } from '../../services/productos.service';
 import { proveedoresService, Proveedor } from '../../services/proveedores.service';
 import { usuariosService, Usuario } from '../../services/usuarios.service';
 import { SelectorComprobante } from '../../components/SelectorComprobante/SelectorComprobante';
-import { formatearMoneda, formatearFecha, aDateInput } from '../../utils/formato';
+import {
+  formatearMoneda,
+  formatearFecha,
+  aDateInput,
+  obtenerFechaMinimaEntrega,
+} from '../../utils/formato';
 import { aNumero } from '../../utils/consulta';
 
 interface LineaForm {
@@ -141,11 +146,102 @@ export const PedidosProveedor: React.FC = () => {
     [form.detalles]
   );
 
+  const fechaMinimaEntrega = useMemo(() => obtenerFechaMinimaEntrega(1), []);
+
+  const proveedorSeleccionado = useMemo(() => {
+    if (!form.id_proveedor) return null;
+    return proveedores.find((p) => String(p.id_proveedor) === String(form.id_proveedor)) ?? null;
+  }, [form.id_proveedor, proveedores]);
+
+  const productosProveedor = useMemo(() => {
+    if (!proveedorSeleccionado) return [];
+
+    const marcasNombres = new Set(
+      (proveedorSeleccionado.marcas || []).map((m) => m.trim().toLowerCase())
+    );
+    const marcasIds = new Set(
+      (proveedorSeleccionado.ids_marcas || []).map((id) => Number(id))
+    );
+
+    return productos.filter((prod) => {
+      return (
+        (prod.id_marca != null && marcasIds.has(Number(prod.id_marca))) ||
+        (prod.nombre_marca != null &&
+          marcasNombres.has(prod.nombre_marca.trim().toLowerCase()))
+      );
+    });
+  }, [proveedorSeleccionado, productos]);
+
+  const cambiarProveedor = (nuevoIdProveedor: string) => {
+    if (nuevoIdProveedor === form.id_proveedor) return;
+
+    if (!nuevoIdProveedor) {
+      setForm((prev) => ({
+        ...prev,
+        id_proveedor: '',
+        detalles: [{ ...LINEA_VACIA }],
+      }));
+      return;
+    }
+
+    const nuevoProv = proveedores.find((p) => String(p.id_proveedor) === String(nuevoIdProveedor));
+    if (!nuevoProv) {
+      setForm((prev) => ({ ...prev, id_proveedor: nuevoIdProveedor }));
+      return;
+    }
+
+    const tieneConfig = nuevoProv.marcas && nuevoProv.marcas.length > 0;
+
+    if (!tieneConfig) {
+      showToast(
+        `El proveedor "${nuevoProv.razon_social}" no tiene marcas asociadas. Debe configurarlas en el módulo de Proveedores.`,
+        'error'
+      );
+    }
+
+    const marcasNombres = new Set((nuevoProv.marcas || []).map((m) => m.trim().toLowerCase()));
+    const marcasIds = new Set((nuevoProv.ids_marcas || []).map((id) => Number(id)));
+
+    const productosValidosIds = new Set(
+      productos
+        .filter((prod) => {
+          return (
+            (prod.id_marca != null && marcasIds.has(Number(prod.id_marca))) ||
+            (prod.nombre_marca != null &&
+              marcasNombres.has(prod.nombre_marca.trim().toLowerCase()))
+          );
+        })
+        .map((p) => String(p.id_producto))
+    );
+
+    const lineasConProducto = form.detalles.filter((d) => d.id_producto !== '');
+    if (lineasConProducto.length > 0) {
+      const detallesFiltrados = form.detalles.filter(
+        (d) => !d.id_producto || productosValidosIds.has(String(d.id_producto))
+      );
+      const eliminados = form.detalles.length - detallesFiltrados.length;
+      if (eliminados > 0) {
+        showToast(
+          `Se quitaron ${eliminados} producto(s) añadidos porque no corresponden al nuevo proveedor.`,
+          'error'
+        );
+      }
+      setForm((prev) => ({
+        ...prev,
+        id_proveedor: nuevoIdProveedor,
+        detalles: detallesFiltrados.length > 0 ? detallesFiltrados : [{ ...LINEA_VACIA }],
+      }));
+    } else {
+      setForm((prev) => ({ ...prev, id_proveedor: nuevoIdProveedor }));
+    }
+  };
+
   const abrirCrear = () => {
     setEditando(null);
     setForm({
       ...FORM_VACIO,
       id_usuario: usuarios[0]?.id_usuario != null ? String(usuarios[0].id_usuario) : '',
+      fecha_entrega_estimada: obtenerFechaMinimaEntrega(1),
       comprobante_url: '',
       detalles: [{ ...LINEA_VACIA }],
     });
@@ -180,8 +276,13 @@ export const PedidosProveedor: React.FC = () => {
       detalles: prev.detalles.map((linea, i) => (i === index ? { ...linea, ...cambios } : linea)),
     }));
 
-  const agregarLinea = () =>
+  const agregarLinea = () => {
+    if (!form.id_proveedor) {
+      showToast('Selecciona primero un proveedor antes de agregar productos.', 'error');
+      return;
+    }
     setForm((prev) => ({ ...prev, detalles: [...prev.detalles, { ...LINEA_VACIA }] }));
+  };
 
   const quitarLinea = (index: number) =>
     setForm((prev) => ({ ...prev, detalles: prev.detalles.filter((_, i) => i !== index) }));
@@ -190,6 +291,21 @@ export const PedidosProveedor: React.FC = () => {
     event.preventDefault();
     setSaving(true);
     try {
+      if (!form.fecha_entrega_estimada || form.fecha_entrega_estimada.trim() === '') {
+        showToast('La fecha estimada de entrega es obligatoria.', 'error');
+        setSaving(false);
+        return;
+      }
+
+      if (form.fecha_entrega_estimada < fechaMinimaEntrega) {
+        showToast(
+          `La fecha estimada de entrega debe ser de al menos un día posterior a la fecha actual (a partir del ${fechaMinimaEntrega}).`,
+          'error'
+        );
+        setSaving(false);
+        return;
+      }
+
       if (editando?.id_pedido != null) {
         const payload: { fecha_entrega_estimada?: string; estado_pedido?: EstadoPedido; comprobante_url?: string | null } = {};
         if (form.fecha_entrega_estimada) {
@@ -210,6 +326,18 @@ export const PedidosProveedor: React.FC = () => {
         const idUsuario = aNumero(form.id_usuario);
         if (idProveedor === undefined || idUsuario === undefined) {
           showToast('Selecciona el proveedor y el usuario responsable.', 'error');
+          setSaving(false);
+          return;
+        }
+
+        if (
+          proveedorSeleccionado &&
+          (proveedorSeleccionado.marcas?.length || 0) === 0
+        ) {
+          showToast(
+            `El proveedor "${proveedorSeleccionado.razon_social}" no tiene marcas asociadas. Configure marcas en el módulo de Proveedores antes de registrar una orden.`,
+            'error'
+          );
           setSaving(false);
           return;
         }
@@ -558,15 +686,18 @@ export const PedidosProveedor: React.FC = () => {
           <form id="form-pedido" onSubmit={guardar} className={styles.formGrid} noValidate>
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="pedido-fecha-edit">
-                Entrega estimada
+                Entrega estimada <span className={styles.requiredMark}>*</span>
               </label>
               <input
                 id="pedido-fecha-edit"
                 className={styles.input}
                 type="date"
+                min={fechaMinimaEntrega}
                 value={form.fecha_entrega_estimada}
                 onChange={(e) => setForm((prev) => ({ ...prev, fecha_entrega_estimada: e.target.value }))}
+                required
               />
+              <span className={styles.hint}>Mínimo a partir de mañana ({fechaMinimaEntrega})</span>
             </div>
             {editando.estado_pedido !== 'Parcial' && (
               <div className={styles.field}>
@@ -609,7 +740,7 @@ export const PedidosProveedor: React.FC = () => {
                 id="pedido-proveedor"
                 className={styles.select}
                 value={form.id_proveedor}
-                onChange={(e) => setForm((prev) => ({ ...prev, id_proveedor: e.target.value }))}
+                onChange={(e) => cambiarProveedor(e.target.value)}
               >
                 <option value="">Seleccionar proveedor</option>
                 {proveedores.map((p) => (
@@ -618,6 +749,17 @@ export const PedidosProveedor: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {proveedorSeleccionado && (
+                <div style={{ marginTop: '6px', fontSize: '12px', color: (proveedorSeleccionado.marcas?.length || 0) === 0 ? '#e53e3e' : '#4b5563' }}>
+                  {(proveedorSeleccionado.marcas?.length || 0) === 0 ? (
+                    <span>⚠️ Este proveedor no tiene marcas asociadas. Configure marcas en el módulo de Proveedores.</span>
+                  ) : (
+                    <span>
+                      <strong>Marcas abastecidas:</strong> {proveedorSeleccionado.marcas.join(', ')} ({productosProveedor.length} productos disponibles)
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className={styles.field}>
@@ -641,15 +783,18 @@ export const PedidosProveedor: React.FC = () => {
 
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="pedido-fecha">
-                Entrega estimada
+                Entrega estimada <span className={styles.requiredMark}>*</span>
               </label>
               <input
                 id="pedido-fecha"
                 className={styles.input}
                 type="date"
+                min={fechaMinimaEntrega}
                 value={form.fecha_entrega_estimada}
                 onChange={(e) => setForm((prev) => ({ ...prev, fecha_entrega_estimada: e.target.value }))}
+                required
               />
+              <span className={styles.hint}>Mínimo a partir de mañana ({fechaMinimaEntrega})</span>
             </div>
 
             <div className={`${styles.field} ${styles.formGridFull}`}>
@@ -667,7 +812,13 @@ export const PedidosProveedor: React.FC = () => {
                 <span className={styles.linesTitle}>
                   <ClipboardList size={15} /> Productos solicitados
                 </span>
-                <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={agregarLinea}>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                  onClick={agregarLinea}
+                  disabled={!form.id_proveedor}
+                  title={!form.id_proveedor ? 'Selecciona un proveedor primero' : 'Agregar producto'}
+                >
                   <Plus size={14} /> Agregar
                 </button>
               </div>
@@ -687,12 +838,31 @@ export const PedidosProveedor: React.FC = () => {
                   <select
                     className={styles.select}
                     value={linea.id_producto}
-                    onChange={(e) => actualizarLinea(index, { id_producto: e.target.value })}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const prod = productos.find((p) => String(p.id_producto) === id);
+                      actualizarLinea(index, {
+                        id_producto: id,
+                        precio_unitario_compra:
+                          prod && (!linea.precio_unitario_compra || linea.precio_unitario_compra === '0')
+                            ? String(prod.precio)
+                            : linea.precio_unitario_compra,
+                      });
+                    }}
+                    disabled={!form.id_proveedor}
                   >
-                    <option value="">Seleccionar</option>
-                    {productos.map((p) => (
+                    <option value="">
+                      {!form.id_proveedor
+                        ? '— Selecciona un proveedor primero —'
+                        : productosProveedor.length === 0
+                        ? '— Proveedor sin productos asociados —'
+                        : 'Seleccionar producto'}
+                    </option>
+                    {productosProveedor.map((p) => (
                       <option key={p.id_producto} value={p.id_producto}>
                         {p.nombre_producto}
+                        {p.nombre_marca ? ` (Marca: ${p.nombre_marca})` : ''}
+                        {p.nombre_linea ? ` [${p.nombre_linea}]` : ''}
                       </option>
                     ))}
                   </select>
