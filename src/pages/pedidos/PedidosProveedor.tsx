@@ -82,6 +82,30 @@ const subtotalLinea = (linea: LineaForm): number => {
   return cantidad * precio * (1 - desc / 100);
 };
 
+const normalizarNombre = (valor?: string | null): string =>
+  (valor ?? '').trim().toLowerCase();
+
+/**
+ * Devuelve únicamente los productos que pertenecen a alguna de las marcas o
+ * líneas abastecidas por el proveedor (misma regla "marca OR línea" del backend).
+ */
+const productosDelProveedor = (
+  proveedor: Proveedor | null,
+  productos: Producto[]
+): Producto[] => {
+  if (!proveedor) return [];
+  const marcas = new Set((proveedor.marcas ?? []).map(normalizarNombre).filter(Boolean));
+  const lineas = new Set(
+    (proveedor.lineas_productos ?? []).map(normalizarNombre).filter(Boolean)
+  );
+  if (marcas.size === 0 && lineas.size === 0) return [];
+  return productos.filter((producto) => {
+    const marca = normalizarNombre(producto.nombre_marca);
+    const linea = normalizarNombre(producto.nombre_linea);
+    return (marca !== '' && marcas.has(marca)) || (linea !== '' && lineas.has(linea));
+  });
+};
+
 export const PedidosProveedor: React.FC = () => {
   const { toast, showToast, closeToast } = useToast();
 
@@ -141,6 +165,24 @@ export const PedidosProveedor: React.FC = () => {
     [form.detalles]
   );
 
+  const proveedorSeleccionado = useMemo(
+    () => proveedores.find((p) => String(p.id_proveedor) === form.id_proveedor) ?? null,
+    [proveedores, form.id_proveedor]
+  );
+
+  const productosDisponibles = useMemo(
+    () => productosDelProveedor(proveedorSeleccionado, productos),
+    [proveedorSeleccionado, productos]
+  );
+
+  const proveedorSinAsociaciones =
+    proveedorSeleccionado !== null &&
+    (proveedorSeleccionado.marcas ?? []).length === 0 &&
+    (proveedorSeleccionado.lineas_productos ?? []).length === 0;
+
+  const puedeAgregarProductos =
+    proveedorSeleccionado !== null && productosDisponibles.length > 0;
+
   const abrirCrear = () => {
     setEditando(null);
     setForm({
@@ -180,8 +222,38 @@ export const PedidosProveedor: React.FC = () => {
       detalles: prev.detalles.map((linea, i) => (i === index ? { ...linea, ...cambios } : linea)),
     }));
 
-  const agregarLinea = () =>
+  const agregarLinea = () => {
+    if (!puedeAgregarProductos) return;
     setForm((prev) => ({ ...prev, detalles: [...prev.detalles, { ...LINEA_VACIA }] }));
+  };
+
+  const cambiarProveedor = (nuevoId: string) => {
+    const nuevoProveedor =
+      proveedores.find((p) => String(p.id_proveedor) === nuevoId) ?? null;
+    const permitidos = new Set(
+      productosDelProveedor(nuevoProveedor, productos).map((p) => String(p.id_producto))
+    );
+    const invalidos = form.detalles.filter(
+      (linea) => linea.id_producto !== '' && !permitidos.has(linea.id_producto)
+    ).length;
+
+    setForm((prev) => ({
+      ...prev,
+      id_proveedor: nuevoId,
+      detalles: prev.detalles.map((linea) =>
+        linea.id_producto !== '' && !permitidos.has(linea.id_producto)
+          ? { ...linea, id_producto: '' }
+          : linea
+      ),
+    }));
+
+    if (invalidos > 0) {
+      showToast(
+        `Se quitaron ${invalidos} producto(s) que no corresponden al proveedor seleccionado.`,
+        'error'
+      );
+    }
+  };
 
   const quitarLinea = (index: number) =>
     setForm((prev) => ({ ...prev, detalles: prev.detalles.filter((_, i) => i !== index) }));
@@ -210,6 +282,32 @@ export const PedidosProveedor: React.FC = () => {
         const idUsuario = aNumero(form.id_usuario);
         if (idProveedor === undefined || idUsuario === undefined) {
           showToast('Selecciona el proveedor y el usuario responsable.', 'error');
+          setSaving(false);
+          return;
+        }
+
+        if (productosDisponibles.length === 0) {
+          showToast(
+            proveedorSinAsociaciones
+              ? 'El proveedor no tiene marcas ni líneas asociadas. Configúralas antes de registrar el pedido.'
+              : 'No hay productos activos que correspondan a las marcas o líneas del proveedor.',
+            'error'
+          );
+          setSaving(false);
+          return;
+        }
+
+        const idsDisponibles = new Set(
+          productosDisponibles.map((p) => String(p.id_producto))
+        );
+        const hayProductoAjeno = form.detalles.some(
+          (linea) => linea.id_producto !== '' && !idsDisponibles.has(linea.id_producto)
+        );
+        if (hayProductoAjeno) {
+          showToast(
+            'Hay productos que no corresponden al proveedor seleccionado. Vuelve a elegirlos.',
+            'error'
+          );
           setSaving(false);
           return;
         }
@@ -609,7 +707,7 @@ export const PedidosProveedor: React.FC = () => {
                 id="pedido-proveedor"
                 className={styles.select}
                 value={form.id_proveedor}
-                onChange={(e) => setForm((prev) => ({ ...prev, id_proveedor: e.target.value }))}
+                onChange={(e) => cambiarProveedor(e.target.value)}
               >
                 <option value="">Seleccionar proveedor</option>
                 {proveedores.map((p) => (
@@ -667,10 +765,42 @@ export const PedidosProveedor: React.FC = () => {
                 <span className={styles.linesTitle}>
                   <ClipboardList size={15} /> Productos solicitados
                 </span>
-                <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={agregarLinea}>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                  onClick={agregarLinea}
+                  disabled={!puedeAgregarProductos}
+                  title={
+                    puedeAgregarProductos
+                      ? 'Agregar producto'
+                      : 'Selecciona un proveedor con marcas o líneas asociadas'
+                  }
+                >
                   <Plus size={14} /> Agregar
                 </button>
               </div>
+
+              {!proveedorSeleccionado ? (
+                <p className={styles.hint}>
+                  Selecciona un proveedor para ver únicamente los productos de las marcas y
+                  líneas que abastece.
+                </p>
+              ) : proveedorSinAsociaciones ? (
+                <p className={styles.hint}>
+                  Este proveedor no tiene marcas ni líneas asociadas. Asígnalas en Proveedores
+                  antes de registrar el pedido.
+                </p>
+              ) : productosDisponibles.length === 0 ? (
+                <p className={styles.hint}>
+                  No hay productos activos que correspondan a las marcas o líneas de este
+                  proveedor.
+                </p>
+              ) : (
+                <p className={styles.hint}>
+                  Mostrando {productosDisponibles.length} producto(s) de las marcas y líneas
+                  abastecidas por {proveedorSeleccionado.razon_social}.
+                </p>
+              )}
 
               <div className={`${styles.lineRow} ${styles.lineRowPedido} ${styles.lineRowHead}`}>
                 <span>Producto</span>
@@ -688,9 +818,10 @@ export const PedidosProveedor: React.FC = () => {
                     className={styles.select}
                     value={linea.id_producto}
                     onChange={(e) => actualizarLinea(index, { id_producto: e.target.value })}
+                    disabled={!puedeAgregarProductos}
                   >
                     <option value="">Seleccionar</option>
-                    {productos.map((p) => (
+                    {productosDisponibles.map((p) => (
                       <option key={p.id_producto} value={p.id_producto}>
                         {p.nombre_producto}
                       </option>
