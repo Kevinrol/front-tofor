@@ -63,7 +63,11 @@ export const LayoutPrincipal: React.FC = () => {
 
       {/* Main Content Area */}
       <div className={styles.mainWrapper}>
-        <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onIrAStock={esAdmin ? () => setActiveTab('inventory') : undefined}
+        />
         {renderPage()}
       </div>
     </div>
