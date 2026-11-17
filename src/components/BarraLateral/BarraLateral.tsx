@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  LayoutGrid,
   Box,
   ShoppingBag,
   ShoppingCart,
@@ -26,6 +25,7 @@ export type NavTab =
 interface NavOption {
   id: NavTab;
   label: string;
+  shortLabel: string;
   icon: React.ReactNode;
 }
 
@@ -38,14 +38,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { esAdmin, logout } = useContextoAuth();
 
   const allNavItems: NavOption[] = [
-    { id: 'dashboard', label: 'Panel Principal', icon: <LayoutGrid size={20} /> },
-    { id: 'inventory', label: 'Almacén & Stock', icon: <Box size={20} /> },
-    { id: 'sales', label: 'Ventas Mostrador', icon: <ShoppingBag size={20} /> },
-    { id: 'purchases', label: 'Compras a Proveedor', icon: <ShoppingCart size={20} /> },
-    { id: 'orders', label: 'Pedidos a Proveedor', icon: <ClipboardList size={20} /> },
-    { id: 'clients', label: 'Clientes', icon: <Users size={20} /> },
-    { id: 'suppliers', label: 'Proveedores', icon: <Truck size={20} /> },
-    { id: 'sellers', label: 'Vendedores / Personal', icon: <UserCheck size={20} /> },
+    { id: 'inventory', label: 'Almacén & Stock', shortLabel: 'Stock', icon: <Box size={20} /> },
+    { id: 'sales', label: 'Ventas Mostrador', shortLabel: 'Ventas', icon: <ShoppingBag size={20} /> },
+    { id: 'purchases', label: 'Compras a Proveedor', shortLabel: 'Compras', icon: <ShoppingCart size={20} /> },
+    { id: 'orders', label: 'Pedidos a Proveedor', shortLabel: 'Pedidos', icon: <ClipboardList size={20} /> },
+    { id: 'clients', label: 'Clientes', shortLabel: 'Clientes', icon: <Users size={20} /> },
+    { id: 'suppliers', label: 'Proveedores', shortLabel: 'Proveed.', icon: <Truck size={20} /> },
+    { id: 'sellers', label: 'Vendedores / Personal', shortLabel: 'Personal', icon: <UserCheck size={20} /> },
   ];
 
   // SUPER_ADMIN y ADMIN ven todas las vistas; VENDEDOR solo ve Ventas Mostrador
@@ -75,6 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
                 aria-current={isActive ? 'page' : undefined}
               >
                 {item.icon}
+                <span className={styles.navLabel}>{item.shortLabel}</span>
                 <span className={styles.tooltip}>{item.label}</span>
               </button>
             );
@@ -85,12 +85,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
       {/* Bottom Logout */}
       <div className={styles.bottomSection}>
         <button
-          className={styles.navItem}
+          className={`${styles.navItem} ${styles.logoutItem}`}
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
           onClick={logout}
         >
           <LogOut size={20} />
+          <span className={styles.navLabel}>Salir</span>
           <span className={styles.tooltip}>Salir</span>
         </button>
       </div>

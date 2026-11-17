@@ -13,11 +13,16 @@ import {
   TrendingUp,
   Printer,
   X,
+  ScanBarcode,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
+import vStyles from './Ventas.module.css';
 import { Modal } from '../../components/Modal/Modal';
 import { Toast } from '../../components/Toast/Toast';
 import { Paginador } from '../../components/Paginador/Paginador';
+import { LectorCodigoBarrasModal } from '../../components/LectorCodigoBarrasModal/LectorCodigoBarrasModal';
 import { useToast } from '../../hooks/useToast';
 import {
   ventasService,
@@ -38,6 +43,8 @@ import { aNumero } from '../../utils/consulta';
 interface LineaForm {
   id_producto: string;
   cantidad: string;
+  unidad_venta: string;
+  factor_conversion: number;
 }
 
 interface FormState {
@@ -51,7 +58,12 @@ interface FormState {
   detalles: LineaForm[];
 }
 
-const LINEA_VACIA: LineaForm = { id_producto: '', cantidad: '1' };
+const LINEA_VACIA: LineaForm = {
+  id_producto: '',
+  cantidad: '1',
+  unidad_venta: 'Unidad',
+  factor_conversion: 1,
+};
 
 const FORM_VACIO: FormState = {
   id_usuario: '',
@@ -84,6 +96,7 @@ export const Ventas: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [editando, setEditando] = useState<Venta | null>(null);
   const [detalle, setDetalle] = useState<Venta | null>(null);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
@@ -94,6 +107,7 @@ export const Ventas: React.FC = () => {
   const [filtroVendedor, setFiltroVendedor] = useState<string>('all');
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(POR_PAGINA_INICIAL);
+  const [vistaModo, setVistaModo] = useState<'cards' | 'table'>('cards');
 
   const cargar = async () => {
     setLoading(true);
@@ -130,12 +144,16 @@ export const Ventas: React.FC = () => {
     return prod ? Number(prod.precio) : 0;
   };
 
+  const subtotalLineaVenta = (linea: LineaForm): number => {
+    const pUnit = precioDe(linea.id_producto);
+    const cant = Number(linea.cantidad) || 0;
+    const factor = Number(linea.factor_conversion) || 1;
+    return cant * factor * pUnit;
+  };
+
   const subtotalEstimado = useMemo(
     () =>
-      form.detalles.reduce((acc, linea) => {
-        const cantidad = Number(linea.cantidad) || 0;
-        return acc + precioDe(linea.id_producto) * cantidad;
-      }, 0),
+      form.detalles.reduce((acc, linea) => acc + subtotalLineaVenta(linea), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [form.detalles, productos]
   );
@@ -170,6 +188,40 @@ export const Ventas: React.FC = () => {
   const efectivoEdicion = Number(form.monto_efectivo) || 0;
   const cambioEdicion = efectivoEdicion - totalEdicion;
 
+  const agregarProductoAlDetalle = (prod: Producto) => {
+    const idStr = String(prod.id_producto);
+    const uDefault = 'Unidad';
+    const fDefault = 1;
+
+    setForm((prev) => {
+      const idx = prev.detalles.findIndex(
+        (d) => d.id_producto === idStr && d.unidad_venta === uDefault
+      );
+      if (idx >= 0) {
+        const detalles = prev.detalles.map((d, i) =>
+          i === idx ? { ...d, cantidad: String((Number(d.cantidad) || 0) + 1) } : d
+        );
+        return { ...prev, detalles };
+      }
+      const emptyIdx = prev.detalles.findIndex((d) => !d.id_producto);
+      if (emptyIdx >= 0) {
+        const detalles = prev.detalles.map((d, i) =>
+          i === emptyIdx
+            ? { id_producto: idStr, cantidad: '1', unidad_venta: uDefault, factor_conversion: fDefault }
+            : d
+        );
+        return { ...prev, detalles };
+      }
+      return {
+        ...prev,
+        detalles: [
+          ...prev.detalles,
+          { id_producto: idStr, cantidad: '1', unidad_venta: uDefault, factor_conversion: fDefault },
+        ],
+      };
+    });
+  };
+
   const agregarPorBusqueda = (q: string) => {
     const term = q.trim().toLowerCase();
     if (!term) return;
@@ -182,21 +234,32 @@ export const Ventas: React.FC = () => {
       showToast('Producto no encontrado.', 'error');
       return;
     }
-    const idStr = String(match.id_producto);
-    setForm((prev) => {
-      const idx = prev.detalles.findIndex((d) => d.id_producto === idStr);
-      if (idx >= 0) {
-        const detalles = prev.detalles.map((d, i) =>
-          i === idx ? { ...d, cantidad: String((Number(d.cantidad) || 0) + 1) } : d
-        );
-        return { ...prev, detalles };
-      }
-      if (prev.detalles.length === 1 && !prev.detalles[0].id_producto) {
-        return { ...prev, detalles: [{ id_producto: idStr, cantidad: '1' }] };
-      }
-      return { ...prev, detalles: [...prev.detalles, { id_producto: idStr, cantidad: '1' }] };
-    });
+    agregarProductoAlDetalle(match);
     setBusquedaRapida('');
+  };
+
+  const agregarPorCodigoBarras = (codigo: string) => {
+    const term = codigo.trim().toLowerCase();
+    if (!term) return;
+    const match = productos.find(
+      (p) => (p.codigo_barras ?? '').trim().toLowerCase() === term
+    );
+    if (!match?.id_producto) {
+      showToast(`No se encontró ningún producto con el código de barras: ${codigo}`, 'error');
+      return;
+    }
+    if (match.stock_actual <= 0) {
+      showToast(`Atención: "${match.nombre_producto}" tiene stock 0.`, 'error');
+    }
+    agregarProductoAlDetalle(match);
+    showToast(`Producto agregado: ${match.nombre_producto}`);
+  };
+
+  const iniciarEscaneo = () => {
+    if (!modalOpen || editando) {
+      abrirCrear();
+    }
+    setScannerOpen(true);
   };
 
   const abrirCrear = () => {
@@ -313,13 +376,17 @@ export const Ventas: React.FC = () => {
           return;
         }
         const detalles = form.detalles
-          .map((linea) => ({
-            id_producto: aNumero(linea.id_producto),
-            cantidad: aNumero(linea.cantidad),
-          }))
+          .map((linea) => {
+            const cant = aNumero(linea.cantidad) ?? 0;
+            const factor = Number(linea.factor_conversion) || 1;
+            return {
+              id_producto: aNumero(linea.id_producto),
+              cantidad: cant * factor,
+            };
+          })
           .filter(
             (d): d is { id_producto: number; cantidad: number } =>
-              d.id_producto !== undefined && d.cantidad !== undefined && d.cantidad > 0
+              d.id_producto !== undefined && d.cantidad > 0
           );
 
         if (detalles.length === 0) {
@@ -442,14 +509,26 @@ export const Ventas: React.FC = () => {
             comprobantes.
           </p>
         </div>
-        <div className={styles.headerActions}>
-          <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={abrirCrear}>
+        <div className={vStyles.headerActionsResponsive}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnGhost} ${vStyles.headerBtn}`}
+            onClick={iniciarEscaneo}
+            title="Escanear producto con cámara para venta"
+          >
+            <ScanBarcode size={16} /> Escanear para Venta
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary} ${vStyles.headerBtn}`}
+            onClick={abrirCrear}
+          >
             <Plus size={16} /> Nueva Venta
           </button>
         </div>
       </div>
 
-      <section className={styles.kpiGrid}>
+      <section className={vStyles.kpiGridResponsive}>
         <div className={styles.kpiCard}>
           <div className={`${styles.kpiIcon} ${styles.accentOrange}`}>
             <Receipt size={22} />
@@ -490,8 +569,8 @@ export const Ventas: React.FC = () => {
           </h2>
         </div>
 
-        <div className={styles.toolbar}>
-          <div className={styles.searchBox}>
+        <div className={vStyles.toolbarResponsive}>
+          <div className={vStyles.searchBoxResponsive}>
             <Search size={15} color="var(--color-text-placeholder)" />
             <input
               type="text"
@@ -502,8 +581,7 @@ export const Ventas: React.FC = () => {
           </div>
           {esAdmin && (
             <select
-              className={styles.select}
-              style={{ maxWidth: 230, height: 36 }}
+              className={`${styles.select} ${vStyles.selectVendedorResponsive}`}
               value={filtroVendedor}
               onChange={(e) => setFiltroVendedor(e.target.value)}
               aria-label="Filtrar ventas por vendedor"
@@ -518,7 +596,7 @@ export const Ventas: React.FC = () => {
                 ))}
             </select>
           )}
-          <div className={styles.filters}>
+          <div className={vStyles.filtersResponsive}>
             <button
               type="button"
               className={`${styles.filterChip} ${filtro === 'all' ? styles.filterChipActive : ''}`}
@@ -537,6 +615,25 @@ export const Ventas: React.FC = () => {
               </button>
             ))}
           </div>
+
+          <div className={vStyles.viewSwitcher}>
+            <button
+              type="button"
+              className={`${vStyles.viewSwitchBtn} ${vistaModo === 'cards' ? vStyles.viewSwitchBtnActive : ''}`}
+              onClick={() => setVistaModo('cards')}
+              title="Ver en formato Tarjetas"
+            >
+              <LayoutGrid size={15} /> Tarjetas
+            </button>
+            <button
+              type="button"
+              className={`${vStyles.viewSwitchBtn} ${vistaModo === 'table' ? vStyles.viewSwitchBtnActive : ''}`}
+              onClick={() => setVistaModo('table')}
+              title="Ver en formato Tabla"
+            >
+              <List size={15} /> Tabla
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -549,8 +646,9 @@ export const Ventas: React.FC = () => {
             <span className={styles.emptyTitle}>Sin ventas</span>
             <span className={styles.emptyText}>Registra la primera venta del día.</span>
           </div>
-        ) : (
-          <div className={styles.tableWrap}>
+        ) : vistaModo === 'table' ? (
+          /* Vista en Formato Tabla */
+          <div className={vStyles.desktopTableWrap}>
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -634,6 +732,89 @@ export const Ventas: React.FC = () => {
               </tbody>
             </table>
           </div>
+        ) : (
+          /* Vista en Formato Tarjetas (Predeterminado en todas las pantallas) */
+          <div className={vStyles.salesCardsGrid}>
+            {visibles.map((v) => (
+              <div key={v.id_venta} className={vStyles.saleCard}>
+                <div className={vStyles.saleCardHeader}>
+                  <div className={vStyles.saleCardIdGroup}>
+                    <span className={vStyles.saleCardId}>#{v.id_venta}</span>
+                    <span className={vStyles.saleCardDate}>{formatearFechaHora(v.fecha_hora)}</span>
+                  </div>
+                  <span className={`${styles.pill} ${pillEstado(String(v.estado_pago))}`}>
+                    {v.estado_pago}
+                  </span>
+                </div>
+
+                <div className={vStyles.saleCardBody}>
+                  <div className={vStyles.saleCardRow}>
+                    <span className={vStyles.saleCardRowLabel}>Cliente:</span>
+                    <span className={vStyles.saleCardRowValue}>
+                      <strong>{v.nombre_cliente || 'Venta general'}</strong>
+                      {v.tipo_cliente && (
+                        <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                          ({v.tipo_cliente})
+                        </span>
+                      )}
+                      {v.nit_cliente && (
+                        <div className={styles.hint}>NIT/CI: {v.nit_cliente}</div>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className={vStyles.saleCardRow}>
+                    <span className={vStyles.saleCardRowLabel}>Vendedor:</span>
+                    <span className={vStyles.saleCardRowValue}>{v.nombre_usuario || '—'}</span>
+                  </div>
+
+                  <div className={vStyles.saleCardRow}>
+                    <span className={vStyles.saleCardRowLabel}>Método:</span>
+                    <span className={vStyles.saleCardRowValue}>
+                      {v.metodo_pago} · {v.tipo_venta}
+                    </span>
+                  </div>
+
+                  <div className={vStyles.saleCardTotalRow}>
+                    <span className={vStyles.saleCardTotalLabel}>Total:</span>
+                    <span className={vStyles.saleCardTotalValue}>{formatearMoneda(v.monto_total)}</span>
+                  </div>
+                </div>
+
+                <div className={vStyles.saleCardActions}>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.btnGhost} ${vStyles.saleCardActionMain}`}
+                    onClick={() => verDetalle(v)}
+                  >
+                    <Eye size={15} /> Comprobante
+                  </button>
+                  {esAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        className={`${styles.iconBtn} ${vStyles.saleCardActionIcon}`}
+                        title="Editar"
+                        onClick={() => abrirEditar(v)}
+                        disabled={v.estado_pago === 'Anulado'}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.iconBtn} ${styles.iconBtnDanger} ${vStyles.saleCardActionIcon}`}
+                        title="Anular"
+                        onClick={() => anular(v)}
+                        disabled={v.estado_pago === 'Anulado'}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         {!loading && (
@@ -658,7 +839,7 @@ export const Ventas: React.FC = () => {
         onClose={() => setModalOpen(false)}
         width={editando ? 520 : 780}
         footer={
-          <>
+          <div className={vStyles.modalFooterResponsive}>
             <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={() => setModalOpen(false)}>
               Cancelar
             </button>
@@ -666,7 +847,7 @@ export const Ventas: React.FC = () => {
               {saving ? <Loader2 size={16} className={styles.spinner} /> : <Save size={16} />}
               {saving ? 'Guardando...' : 'Guardar'}
             </button>
-          </>
+          </div>
         }
       >
         {editando ? (
@@ -700,21 +881,6 @@ export const Ventas: React.FC = () => {
               </select>
             </div>
             <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="venta-descuento-editar">
-                Descuento (Bs)
-              </label>
-              <input
-                id="venta-descuento-editar"
-                className={styles.input}
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.monto_descuento}
-                onChange={(e) => setForm((prev) => ({ ...prev, monto_descuento: e.target.value }))}
-                placeholder="0.00"
-              />
-            </div>
-            <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="venta-estado">
                 Estado de pago
               </label>
@@ -733,30 +899,88 @@ export const Ventas: React.FC = () => {
                 ))}
               </select>
             </div>
-            {editando.metodo_pago === 'Efectivo' && (
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="venta-efectivo-editar">
-                  Monto entregado (Bs)
-                </label>
-                <input
-                  id="venta-efectivo-editar"
-                  className={styles.input}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.monto_efectivo}
-                  onChange={(e) => setForm((prev) => ({ ...prev, monto_efectivo: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </div>
-            )}
+
+            {/* Panel de Cálculo de Totales y Cobro en Edición */}
             <div className={`${styles.field} ${styles.formGridFull}`}>
-              <span className={styles.hint}>
-                Subtotal: {formatearMoneda(subtotalEdicion)} · Total: {formatearMoneda(totalEdicion)}
-                {editando.metodo_pago === 'Efectivo'
-                  ? ` · Vuelto: ${formatearMoneda(cambioEdicion)}`
-                  : ''}
-              </span>
+              <div className={vStyles.cobroPanel}>
+                {/* 1. Cálculo del Total: Subtotal, Descuento y Total */}
+                <div className={vStyles.cobroCalculoRow}>
+                  <div className={vStyles.cobroDatoGrupo}>
+                    <span className={vStyles.cobroDatoLabel}>Subtotal:</span>
+                    <span className={vStyles.cobroDatoValor}>{formatearMoneda(subtotalEdicion)}</span>
+                  </div>
+
+                  <div className={vStyles.cobroDatoGrupo}>
+                    <label htmlFor="venta-descuento-editar" className={vStyles.cobroDatoLabel}>
+                      Descuento (Bs):
+                    </label>
+                    <input
+                      id="venta-descuento-editar"
+                      className={`${styles.input} ${vStyles.cobroDescuentoInput}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.monto_descuento}
+                      onChange={(e) => setForm((prev) => ({ ...prev, monto_descuento: e.target.value }))}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div className={vStyles.cobroTotalDestacado}>
+                    <span className={vStyles.cobroTotalLabel}>Total calculado:</span>
+                    <span className={vStyles.cobroTotalValor}>{formatearMoneda(totalEdicion)}</span>
+                  </div>
+                </div>
+
+                {/* 2. Campo Monto Entregado y Vuelto: DESPUÉS DE CALCULAR EL TOTAL */}
+                {editando.metodo_pago === 'Efectivo' && (
+                  <>
+                    <hr className={vStyles.cobroDivider} />
+                    <div className={vStyles.cobroEfectivoRow}>
+                      <div className={vStyles.cobroEfectivoInputWrap}>
+                        <label htmlFor="venta-efectivo-editar" className={vStyles.cobroDatoLabel}>
+                          Monto entregado (Bs):
+                        </label>
+                        <input
+                          id="venta-efectivo-editar"
+                          className={`${styles.input} ${vStyles.cobroEfectivoInput}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.monto_efectivo}
+                          onChange={(e) => setForm((prev) => ({ ...prev, monto_efectivo: e.target.value }))}
+                          placeholder={totalEdicion > 0 ? totalEdicion.toFixed(2) : '0.00'}
+                        />
+                        {totalEdicion > 0 && (
+                          <button
+                            type="button"
+                            className={vStyles.cobroBtnExacto}
+                            onClick={() => setForm((prev) => ({ ...prev, monto_efectivo: totalEdicion.toFixed(2) }))}
+                            title="Completar con el monto exacto"
+                          >
+                            Monto exacto
+                          </button>
+                        )}
+                      </div>
+
+                      <div className={vStyles.cobroVueltoWrap}>
+                        <span className={vStyles.cobroDatoLabel}>
+                          {cambioEdicion >= 0 ? 'Vuelto / Cambio:' : 'Falta abonar:'}
+                        </span>
+                        {cambioEdicion >= 0 ? (
+                          <span className={vStyles.cobroVueltoBadgePositivo}>
+                            {formatearMoneda(cambioEdicion)}
+                          </span>
+                        ) : (
+                          <span className={vStyles.cobroVueltoBadgeAlerta}>
+                            {formatearMoneda(Math.abs(cambioEdicion))}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </form>
         ) : (
@@ -800,22 +1024,6 @@ export const Ventas: React.FC = () => {
               </select>
               <div style={{ marginTop: '4px', fontSize: '12px', color: esClienteMayorista ? '#059669' : '#6b7280' }}>
               </div>
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="venta-descuento">
-                Descuento (Bs)
-              </label>
-              <input
-                id="venta-descuento"
-                className={styles.input}
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.monto_descuento}
-                onChange={(e) => setForm((prev) => ({ ...prev, monto_descuento: e.target.value }))}
-                placeholder="0.00"
-              />
             </div>
 
             {esClienteMayorista && (
@@ -863,74 +1071,34 @@ export const Ventas: React.FC = () => {
               </select>
             </div>
 
-            {form.tipo_venta === 'Credito' ? (
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="venta-estado-nuevo">
-                  Estado de pago (Venta a Crédito)
-                </label>
-                <select
-                  id="venta-estado-nuevo"
-                  className={styles.select}
-                  value={form.estado_pago}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, estado_pago: e.target.value as EstadoPagoVenta }))
-                  }
-                >
-                  {ESTADOS.filter((e) => e !== 'Anulado').map((estado) => (
-                    <option key={estado} value={estado}>
-                      {estado}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : form.metodo_pago === 'Efectivo' ? (
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="venta-efectivo">
-                  Monto entregado (Bs)
-                </label>
-                <input
-                  id="venta-efectivo"
-                  className={styles.input}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.monto_efectivo}
-                  onChange={(e) => setForm((prev) => ({ ...prev, monto_efectivo: e.target.value }))}
-                  placeholder={totalEstimado.toFixed(2)}
-                />
-                <span className={styles.hint}>Vuelto: {formatearMoneda((Number(form.monto_efectivo) || 0) - totalEstimado)}</span>
-              </div>
-            ) : (
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="venta-estado-nuevo">
-                  Estado de pago
-                </label>
-                <select
-                  id="venta-estado-nuevo"
-                  className={styles.select}
-                  value={form.estado_pago}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, estado_pago: e.target.value as EstadoPagoVenta }))
-                  }
-                >
-                  {ESTADOS.filter((e) => e !== 'Anulado').map((estado) => (
-                    <option key={estado} value={estado}>
-                      {estado}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="venta-estado-nuevo">
+                Estado de pago {form.tipo_venta === 'Credito' ? '(Venta a Crédito)' : ''}
+              </label>
+              <select
+                id="venta-estado-nuevo"
+                className={styles.select}
+                value={form.estado_pago}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, estado_pago: e.target.value as EstadoPagoVenta }))
+                }
+              >
+                {ESTADOS.filter((e) => e !== 'Anulado').map((estado) => (
+                  <option key={estado} value={estado}>
+                    {estado}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className={`${styles.field} ${styles.formGridFull}`}>
-              <div className={styles.linesHeader}>
+              <div className={vStyles.canastaHeaderWrap}>
                 <span className={styles.linesTitle}>
                   <ShoppingBag size={15} /> Canasta de Productos
                 </span>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div className={vStyles.canastaSearchGroup}>
                   <input
-                    className={styles.input}
-                    style={{ width: '240px', padding: '5px 10px' }}
+                    className={`${styles.input} ${vStyles.canastaSearchInput}`}
                     type="text"
                     list="lista-productos-pos"
                     placeholder="Buscar código o nombre + Enter..."
@@ -944,74 +1112,235 @@ export const Ventas: React.FC = () => {
                     }}
                   />
                   <datalist id="lista-productos-pos">
-                    {productos.map((p) => (
-                      <option key={p.id_producto} value={p.codigo_barras || p.nombre_producto}>
-                        {p.nombre_producto} — {formatearMoneda(p.precio)} (Stock: {p.stock_actual})
-                      </option>
-                    ))}
+                    {productos.map((p) => {
+                      const unidadesTexto = (p.unidades || [])
+                        .map((u) => `${u.nombre_unidad} (${u.cantidad_unidades}u)`)
+                        .join(', ');
+                      return (
+                        <option key={p.id_producto} value={p.codigo_barras || p.nombre_producto}>
+                          {p.nombre_producto} — {formatearMoneda(p.precio)} (Stock: {p.stock_actual} u.) · [Medidas: {unidadesTexto || 'Unidad'}]
+                        </option>
+                      );
+                    })}
                   </datalist>
-                  <button
-                    type="button"
-                    className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                    onClick={() => (busquedaRapida.trim() ? agregarPorBusqueda(busquedaRapida) : agregarLinea())}
-                  >
-                    <Plus size={14} /> Agregar
-                  </button>
+                  <div className={vStyles.canastaActionBtns}>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => (busquedaRapida.trim() ? agregarPorBusqueda(busquedaRapida) : agregarLinea())}
+                    >
+                      <Plus size={14} /> Agregar
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => setScannerOpen(true)}
+                      title="Escanear código de barras con la cámara"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <ScanBarcode size={14} /> Escanear código
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className={`${styles.lineRow} ${styles.lineRowHead}`}>
+              <div className={vStyles.canastaHeader}>
                 <span>Producto</span>
-                <span>Cantidad</span>
-                <span>Precio</span>
+                <span>Cant.</span>
+                <span>Unidad / Medida</span>
+                <span>Precio unit.</span>
                 <span>Subtotal</span>
                 <span />
               </div>
 
               {form.detalles.map((linea, index) => {
-                const precio = precioDe(linea.id_producto);
-                const subtotal = precio * (Number(linea.cantidad) || 0);
+                const prod = productos.find((p) => String(p.id_producto) === linea.id_producto);
+                const precio = prod ? Number(prod.precio) : 0;
+                const factor = Number(linea.factor_conversion) || 1;
+                const cant = Number(linea.cantidad) || 0;
+                const totalUnidades = cant * factor;
+                const subtotal = totalUnidades * precio;
+
+                const unidadesDisponibles =
+                  prod?.unidades && prod.unidades.length > 0
+                    ? prod.unidades
+                    : [
+                        { nombre_unidad: 'Unidad', cantidad_unidades: 1 },
+                        { nombre_unidad: 'Media Docena', cantidad_unidades: 6 },
+                        { nombre_unidad: 'Docena', cantidad_unidades: 12 },
+                      ];
+
                 return (
-                  <div key={index} className={styles.lineRow}>
-                    <select
-                      className={styles.select}
-                      value={linea.id_producto}
-                      onChange={(e) => actualizarLinea(index, { id_producto: e.target.value })}
-                    >
-                      <option value="">Seleccionar</option>
-                      {productos.map((p) => (
-                        <option key={p.id_producto} value={p.id_producto}>
-                          {p.nombre_producto} (stock: {p.stock_actual})
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className={styles.input}
-                      type="number"
-                      min="1"
-                      value={linea.cantidad}
-                      onChange={(e) => actualizarLinea(index, { cantidad: e.target.value })}
-                    />
-                    <span className={styles.money}>{formatearMoneda(precio)}</span>
-                    <span className={styles.money}>{formatearMoneda(subtotal)}</span>
-                    <button
-                      type="button"
-                      className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                      onClick={() => quitarLinea(index)}
-                      title="Quitar"
-                      disabled={form.detalles.length === 1}
-                    >
-                      <X size={15} />
-                    </button>
+                  <div key={index} className={vStyles.canastaItem}>
+                    <div className={vStyles.canastaColProducto}>
+                      <span className={vStyles.canastaMobileTag}>Producto</span>
+                      <select
+                        className={styles.select}
+                        value={linea.id_producto}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          const pSel = productos.find((x) => String(x.id_producto) === id);
+                          const uDefault = pSel?.unidades?.[0]?.nombre_unidad || 'Unidad';
+                          const fDefault = pSel?.unidades?.[0]?.cantidad_unidades || 1;
+                          actualizarLinea(index, {
+                            id_producto: id,
+                            unidad_venta: uDefault,
+                            factor_conversion: fDefault,
+                          });
+                        }}
+                      >
+                        <option value="">Seleccionar producto</option>
+                        {productos.map((p) => (
+                          <option key={p.id_producto} value={p.id_producto}>
+                            {p.nombre_producto} (Stock: {p.stock_actual} u.)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={vStyles.canastaColCantidad}>
+                      <span className={vStyles.canastaMobileTag}>Cant.</span>
+                      <input
+                        className={styles.input}
+                        type="number"
+                        min="1"
+                        value={linea.cantidad}
+                        onChange={(e) => actualizarLinea(index, { cantidad: e.target.value })}
+                      />
+                    </div>
+
+                    <div className={vStyles.canastaColUnidad}>
+                      <span className={vStyles.canastaMobileTag}>Unidad / Medida</span>
+                      <select
+                        className={styles.select}
+                        value={linea.unidad_venta}
+                        disabled={!linea.id_producto}
+                        title={factor > 1 ? `${cant} ${linea.unidad_venta} = ${totalUnidades} u. sueltas a descontar` : undefined}
+                        onChange={(e) => {
+                          const nom = e.target.value;
+                          const uObj = unidadesDisponibles.find(
+                            (u) => u.nombre_unidad.trim().toLowerCase() === nom.trim().toLowerCase()
+                          );
+                          const f = uObj?.cantidad_unidades ?? 1;
+                          actualizarLinea(index, { unidad_venta: nom, factor_conversion: f });
+                        }}
+                      >
+                        {unidadesDisponibles.map((u) => (
+                          <option key={u.nombre_unidad} value={u.nombre_unidad}>
+                            {u.nombre_unidad} ({u.cantidad_unidades} u.)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={vStyles.canastaColPrecio}>
+                      <span className={vStyles.canastaMobileTag}>Precio unit.</span>
+                      <span className={styles.money}>{formatearMoneda(precio)}</span>
+                    </div>
+
+                    <div className={vStyles.canastaColSubtotal}>
+                      <span className={vStyles.canastaMobileTag}>Subtotal</span>
+                      <span className={`${styles.money} ${vStyles.subtotalValue}`} title={factor > 1 ? `${totalUnidades} u. sueltas × ${formatearMoneda(precio)}` : undefined}>
+                        {formatearMoneda(subtotal)}
+                      </span>
+                    </div>
+
+                    <div className={vStyles.canastaColAccion}>
+                      <button
+                        type="button"
+                        className={`${styles.iconBtn} ${styles.iconBtnDanger} ${vStyles.canastaBtnQuitar}`}
+                        onClick={() => quitarLinea(index)}
+                        title="Quitar"
+                        disabled={form.detalles.length === 1}
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
 
-              <div className={styles.lineTotal}>
-                <span className={styles.lineTotalLabel}>
-                  Subtotal: {formatearMoneda(subtotalEstimado)} · Desc: -{formatearMoneda(descuentoNum)} · Total a cobrar
-                </span>
-                {formatearMoneda(totalEstimado)}
+              {/* Panel de Cálculo de Totales y Cobro */}
+              <div className={vStyles.cobroPanel}>
+                {/* 1. Cálculo del Total: Subtotal, Descuento y Total a cobrar */}
+                <div className={vStyles.cobroCalculoRow}>
+                  <div className={vStyles.cobroDatoGrupo}>
+                    <span className={vStyles.cobroDatoLabel}>Subtotal:</span>
+                    <span className={vStyles.cobroDatoValor}>{formatearMoneda(subtotalEstimado)}</span>
+                  </div>
+
+                  <div className={vStyles.cobroDatoGrupo}>
+                    <label htmlFor="venta-descuento" className={vStyles.cobroDatoLabel}>
+                      Descuento (Bs):
+                    </label>
+                    <input
+                      id="venta-descuento"
+                      className={`${styles.input} ${vStyles.cobroDescuentoInput}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.monto_descuento}
+                      onChange={(e) => setForm((prev) => ({ ...prev, monto_descuento: e.target.value }))}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div className={vStyles.cobroTotalDestacado}>
+                    <span className={vStyles.cobroTotalLabel}>Total a cobrar:</span>
+                    <span className={vStyles.cobroTotalValor}>{formatearMoneda(totalEstimado)}</span>
+                  </div>
+                </div>
+
+                {/* 2. Campo Monto Entregado y Vuelto: DESPUÉS DE CALCULAR EL TOTAL */}
+                {form.metodo_pago === 'Efectivo' && (
+                  <>
+                    <hr className={vStyles.cobroDivider} />
+                    <div className={vStyles.cobroEfectivoRow}>
+                      <div className={vStyles.cobroEfectivoInputWrap}>
+                        <label htmlFor="venta-efectivo" className={vStyles.cobroDatoLabel}>
+                          Monto entregado (Bs):
+                        </label>
+                        <input
+                          id="venta-efectivo"
+                          className={`${styles.input} ${vStyles.cobroEfectivoInput}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.monto_efectivo}
+                          onChange={(e) => setForm((prev) => ({ ...prev, monto_efectivo: e.target.value }))}
+                          placeholder={totalEstimado > 0 ? totalEstimado.toFixed(2) : '0.00'}
+                        />
+                        {totalEstimado > 0 && (
+                          <button
+                            type="button"
+                            className={vStyles.cobroBtnExacto}
+                            onClick={() => setForm((prev) => ({ ...prev, monto_efectivo: totalEstimado.toFixed(2) }))}
+                            title="Completar con el monto exacto"
+                          >
+                            Monto exacto
+                          </button>
+                        )}
+                      </div>
+
+                      <div className={vStyles.cobroVueltoWrap}>
+                        <span className={vStyles.cobroDatoLabel}>
+                          {Number(form.monto_efectivo || 0) >= totalEstimado
+                            ? 'Vuelto / Cambio:'
+                            : 'Falta abonar:'}
+                        </span>
+                        {Number(form.monto_efectivo || 0) >= totalEstimado ? (
+                          <span className={vStyles.cobroVueltoBadgePositivo}>
+                            {formatearMoneda((Number(form.monto_efectivo) || 0) - totalEstimado)}
+                          </span>
+                        ) : (
+                          <span className={vStyles.cobroVueltoBadgeAlerta}>
+                            {formatearMoneda(totalEstimado - (Number(form.monto_efectivo) || 0))}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </form>
@@ -1027,7 +1356,7 @@ export const Ventas: React.FC = () => {
         footer={
           <button
             type="button"
-            className={`${styles.btn} ${styles.btnPrimary}`}
+            className={`${styles.btn} ${styles.btnPrimary} ${vStyles.printBtnResponsive}`}
             onClick={() => window.print()}
           >
             <Printer size={16} /> Imprimir / Guardar PDF
@@ -1036,7 +1365,7 @@ export const Ventas: React.FC = () => {
       >
         {detalle && (
           <>
-            <div className={styles.detailGrid}>
+            <div className={vStyles.detailGridResponsive}>
               <div className={styles.detailItem}>
                 <span className={styles.detailItemLabel}>Fecha</span>
                 <span className={styles.detailItemValue}>{formatearFechaHora(detalle.fecha_hora)}</span>
@@ -1102,6 +1431,14 @@ export const Ventas: React.FC = () => {
           </>
         )}
       </Modal>
+
+      <LectorCodigoBarrasModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={(codigo) => {
+          agregarPorCodigoBarras(codigo);
+        }}
+      />
     </main>
   );
 };

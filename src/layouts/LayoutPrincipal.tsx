@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Sidebar, NavTab } from '../components/BarraLateral/BarraLateral';
 import { Header } from '../components/Encabezado/Encabezado';
-import { Panel } from '../pages/Dashboard/Panel';
 import { Proveedores } from '../pages/proveedores/Proveedores';
 import { Productos } from '../pages/productos/Productos';
 import { Clientes } from '../pages/clientes/Clientes';
@@ -19,7 +18,7 @@ import styles from '../pages/Dashboard/Panel.module.css';
 export const LayoutPrincipal: React.FC = () => {
   const { esAdmin } = useContextoAuth();
   const [activeTab, setActiveTab] = useState<NavTab>(() =>
-    esAdmin ? 'dashboard' : 'sales',
+    esAdmin ? 'inventory' : 'sales',
   );
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -32,7 +31,6 @@ export const LayoutPrincipal: React.FC = () => {
 
     switch (tabEfectiva) {
       case 'dashboard':
-        return <Panel searchQuery={searchQuery} />;
       case 'inventory':
         return <Productos />;
       case 'sales':

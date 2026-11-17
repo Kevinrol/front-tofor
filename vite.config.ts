@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      'arab-thirty-denied-zope.trycloudflare.com'
+      'double-whale-daily-commonwealth.trycloudflare.com'
     ],
     port: 5173,
     open: false,

@@ -43,6 +43,7 @@ interface LineaForm {
   id_producto: string;
   cantidad_solicitada: string;
   unidad_venta: string;
+  factor_conversion: string;
   precio_unitario_compra: string;
   porcentaje_descuento: string;
 }
@@ -60,6 +61,7 @@ const LINEA_VACIA: LineaForm = {
   id_producto: '',
   cantidad_solicitada: '1',
   unidad_venta: 'Unidad',
+  factor_conversion: '1',
   precio_unitario_compra: '',
   porcentaje_descuento: '0',
 };
@@ -73,7 +75,30 @@ const FORM_VACIO: FormState = {
   detalles: [{ ...LINEA_VACIA }],
 };
 
-const UNIDADES = ['Unidad', 'Caja', 'Paquete', 'Docena', 'Media Docena', 'Gruesa'];
+const UNIDADES_BASE_FIJAS: Array<{ nombre: string; cantidad: number }> = [
+  { nombre: 'Unidad', cantidad: 1 },
+  { nombre: 'Media Docena', cantidad: 6 },
+  { nombre: 'Docena', cantidad: 12 },
+];
+
+const esUnidadFija = (nombreUnidad: string): boolean => {
+  const n = nombreUnidad.trim().toLowerCase();
+  return UNIDADES_BASE_FIJAS.some((u) => u.nombre.toLowerCase() === n);
+};
+
+const obtenerFactorUnidad = (prod: Producto | undefined, nombreUnidad: string): number => {
+  const n = nombreUnidad.trim().toLowerCase();
+  const fija = UNIDADES_BASE_FIJAS.find((u) => u.nombre.toLowerCase() === n);
+  if (fija) return fija.cantidad;
+  const encontrada = prod?.unidades?.find(
+    (u) => u.nombre_unidad.trim().toLowerCase() === n,
+  );
+  if (encontrada && encontrada.cantidad_unidades >= 1) {
+    return encontrada.cantidad_unidades;
+  }
+  return 1;
+};
+
 const ESTADOS: EstadoPedido[] = ['Pendiente', 'Enviado', 'Parcial', 'Recibido', 'Cancelado'];
 
 type FiltroEstado = 'all' | EstadoPedido;
@@ -347,11 +372,17 @@ export const PedidosProveedor: React.FC = () => {
           const l = form.detalles[i];
           if (!l.id_producto) continue;
           const cant = aNumero(l.cantidad_solicitada);
+          const factor = aNumero(l.factor_conversion);
           const prec = aNumero(l.precio_unitario_compra);
           const desc = aNumero(l.porcentaje_descuento) ?? 0;
 
           if (cant === undefined || cant <= 0) {
             showToast(`Línea #${i + 1}: La cantidad solicitada debe ser mayor a 0.`, 'error');
+            setSaving(false);
+            return;
+          }
+          if (factor === undefined || !Number.isInteger(factor) || factor < 1) {
+            showToast(`Línea #${i + 1}: La cantidad de unidades por "${l.unidad_venta}" debe ser un entero mayor o igual a 1.`, 'error');
             setSaving(false);
             return;
           }
@@ -377,6 +408,7 @@ export const PedidosProveedor: React.FC = () => {
             id_producto: aNumero(linea.id_producto),
             cantidad_solicitada: aNumero(linea.cantidad_solicitada),
             unidad_venta: linea.unidad_venta,
+            factor_conversion: aNumero(linea.factor_conversion) ?? 1,
             precio_unitario_compra: aNumero(linea.precio_unitario_compra),
             porcentaje_descuento: aNumero(linea.porcentaje_descuento) ?? 0,
           }))
@@ -385,12 +417,14 @@ export const PedidosProveedor: React.FC = () => {
               id_producto: number;
               cantidad_solicitada: number;
               unidad_venta: string;
+              factor_conversion: number;
               precio_unitario_compra: number;
               porcentaje_descuento: number;
             } =>
               d.id_producto !== undefined &&
               d.cantidad_solicitada !== undefined &&
               d.cantidad_solicitada > 0 &&
+              d.factor_conversion >= 1 &&
               d.precio_unitario_compra !== undefined &&
               d.unidad_venta.trim() !== ''
           );
@@ -853,105 +887,187 @@ export const PedidosProveedor: React.FC = () => {
                 </button>
               </div>
 
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', color: '#334155', background: '#f8fafc', padding: '7px 10px', borderRadius: '6px', marginBottom: '10px', border: '1px solid #cbd5e1' }}>
+                <span>🔒 <strong>Unidades base fijas:</strong> <em>Unidad (1 u.)</em>, <em>Media Docena (6 u.)</em> y <em>Docena (12 u.)</em> son estándar y no editables. Las demás medidas son agregables y editables por producto.</span>
+              </div>
+
               <div className={`${styles.lineRow} ${styles.lineRowPedido} ${styles.lineRowHead}`}>
                 <span>Producto</span>
                 <span>Cant.</span>
                 <span>Unidad</span>
+                <span>U. x Medida</span>
                 <span>Precio</span>
                 <span>Desc.%</span>
                 <span>Subtotal</span>
                 <span />
               </div>
 
-              {form.detalles.map((linea, index) => (
-                <div key={index} className={`${styles.lineRow} ${styles.lineRowPedido}`}>
-                  <select
-                    className={styles.select}
-                    value={linea.id_producto}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      const prod = productos.find((p) => String(p.id_producto) === id);
-                      actualizarLinea(index, {
-                        id_producto: id,
-                        precio_unitario_compra:
-                          prod && (!linea.precio_unitario_compra || linea.precio_unitario_compra === '0')
-                            ? String(prod.precio)
-                            : linea.precio_unitario_compra,
-                      });
-                    }}
-                    disabled={!form.id_proveedor}
-                  >
-                    <option value="">
-                      {!form.id_proveedor
-                        ? '— Selecciona un proveedor primero —'
-                        : productosProveedor.length === 0
-                        ? '— Proveedor sin productos asociados —'
-                        : 'Seleccionar producto'}
-                    </option>
-                    {productosProveedor.map((p) => (
-                      <option key={p.id_producto} value={p.id_producto}>
-                        {p.nombre_producto}
-                        {p.nombre_marca ? ` (Marca: ${p.nombre_marca})` : ''}
-                        {p.nombre_linea ? ` [${p.nombre_linea}]` : ''}
+              {form.detalles.map((linea, index) => {
+                const prodActual = productos.find((p) => String(p.id_producto) === linea.id_producto);
+                const unidadesOpcionalesProd = (prodActual?.unidades || []).filter(
+                  (u) => !esUnidadFija(u.nombre_unidad),
+                );
+                const esPersonalizada =
+                  linea.unidad_venta.trim() !== '' &&
+                  !esUnidadFija(linea.unidad_venta) &&
+                  !unidadesOpcionalesProd.some(
+                    (u) => u.nombre_unidad.trim().toLowerCase() === linea.unidad_venta.trim().toLowerCase(),
+                  );
+                const unidadBloqueada = esUnidadFija(linea.unidad_venta);
+                const totalUnidadesSueltas =
+                  (Number(linea.cantidad_solicitada) || 0) * (Number(linea.factor_conversion) || 1);
+
+                return (
+                  <div key={index} className={`${styles.lineRow} ${styles.lineRowPedido}`}>
+                    <select
+                      className={styles.select}
+                      value={linea.id_producto}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const prod = productos.find((p) => String(p.id_producto) === id);
+                        const factor = obtenerFactorUnidad(prod, linea.unidad_venta);
+                        actualizarLinea(index, {
+                          id_producto: id,
+                          factor_conversion: String(factor),
+                          precio_unitario_compra:
+                            prod && (!linea.precio_unitario_compra || linea.precio_unitario_compra === '0')
+                              ? String(Number(prod.precio_compra) > 0 ? prod.precio_compra : prod.precio)
+                              : linea.precio_unitario_compra,
+                        });
+                      }}
+                      disabled={!form.id_proveedor}
+                    >
+                      <option value="">
+                        {!form.id_proveedor
+                          ? '— Selecciona un proveedor primero —'
+                          : productosProveedor.length === 0
+                          ? '— Proveedor sin productos asociados —'
+                          : 'Seleccionar producto'}
                       </option>
-                    ))}
-                  </select>
-                  <input
-                    className={styles.input}
-                    type="number"
-                    min="1"
-                    value={linea.cantidad_solicitada}
-                    onChange={(e) => actualizarLinea(index, { cantidad_solicitada: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
-                    }}
-                  />
-                  <select
-                    className={styles.select}
-                    value={linea.unidad_venta}
-                    onChange={(e) => actualizarLinea(index, { unidad_venta: e.target.value })}
-                  >
-                    {UNIDADES.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className={styles.input}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={linea.precio_unitario_compra}
-                    onChange={(e) => actualizarLinea(index, { precio_unitario_compra: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
-                    }}
-                  />
-                  <input
-                    className={styles.input}
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={linea.porcentaje_descuento}
-                    onChange={(e) => actualizarLinea(index, { porcentaje_descuento: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
-                    }}
-                  />
-                  <span className={styles.money}>{formatearMoneda(subtotalLinea(linea))}</span>
-                  <button
-                    type="button"
-                    className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                    onClick={() => quitarLinea(index)}
-                    title="Quitar"
-                    disabled={form.detalles.length === 1}
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
-              ))}
+                      {productosProveedor.map((p) => (
+                        <option key={p.id_producto} value={p.id_producto}>
+                          {p.nombre_producto}
+                          {p.nombre_marca ? ` (Marca: ${p.nombre_marca})` : ''}
+                          {p.nombre_linea ? ` [${p.nombre_linea}]` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min="1"
+                      value={linea.cantidad_solicitada}
+                      onChange={(e) => actualizarLinea(index, { cantidad_solicitada: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                      }}
+                    />
+                    <select
+                      className={styles.select}
+                      value={linea.unidad_venta}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__NUEVA__') {
+                          const nombreNueva = window.prompt(
+                            'Ingresa el nombre de la nueva unidad de pedido (ej. Caja Madre, Display, Tira, Paquete):',
+                          );
+                          if (nombreNueva && nombreNueva.trim()) {
+                            const limpia = nombreNueva.trim();
+                            actualizarLinea(index, {
+                              unidad_venta: limpia,
+                              factor_conversion: '1',
+                            });
+                          }
+                          return;
+                        }
+                        const factor = obtenerFactorUnidad(prodActual, val);
+                        actualizarLinea(index, {
+                          unidad_venta: val,
+                          factor_conversion: String(factor),
+                        });
+                      }}
+                    >
+                      <optgroup label="Unidades Base (Fijas - No editables)">
+                        <option value="Unidad">Unidad (1 u.)</option>
+                        <option value="Media Docena">Media Docena (6 u.)</option>
+                        <option value="Docena">Docena (12 u.)</option>
+                      </optgroup>
+                      {unidadesOpcionalesProd.length > 0 && (
+                        <optgroup label="Presentaciones del Producto">
+                          {unidadesOpcionalesProd.map((u) => (
+                            <option key={u.nombre_unidad} value={u.nombre_unidad}>
+                              {u.nombre_unidad} ({u.cantidad_unidades} u.)
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {esPersonalizada && (
+                        <optgroup label="Personalizada">
+                          <option value={linea.unidad_venta}>{linea.unidad_venta}</option>
+                        </optgroup>
+                      )}
+                      <option value="__NUEVA__">+ Otra unidad...</option>
+                    </select>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={linea.factor_conversion}
+                      disabled={unidadBloqueada}
+                      style={{
+                        backgroundColor: unidadBloqueada ? '#f1f5f9' : '#ffffff',
+                        color: unidadBloqueada ? '#64748b' : '#0f172a',
+                        fontWeight: unidadBloqueada ? 600 : 400,
+                      }}
+                      title={
+                        unidadBloqueada
+                          ? `🔒 ${linea.unidad_venta} es unidad base fija (no editable: ${linea.factor_conversion} u.)`
+                          : `Cantidad de unidades que trae 1 ${linea.unidad_venta} (Total: ${totalUnidadesSueltas} u. al stock)`
+                      }
+                      onChange={(e) => actualizarLinea(index, { factor_conversion: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '.') e.preventDefault();
+                      }}
+                    />
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={linea.precio_unitario_compra}
+                      onChange={(e) => actualizarLinea(index, { precio_unitario_compra: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                      }}
+                    />
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={linea.porcentaje_descuento}
+                      onChange={(e) => actualizarLinea(index, { porcentaje_descuento: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+                      }}
+                    />
+                    <span className={styles.money} title={`Ingresarán ${totalUnidadesSueltas} u. sueltas al stock`}>
+                      {formatearMoneda(subtotalLinea(linea))}
+                    </span>
+                    <button
+                      type="button"
+                      className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
+                      onClick={() => quitarLinea(index)}
+                      title="Quitar"
+                      disabled={form.detalles.length === 1}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                );
+              })}
 
               <div className={styles.lineTotal}>
                 <span className={styles.lineTotalLabel}>Total estimado</span>
@@ -1035,7 +1151,12 @@ export const PedidosProveedor: React.FC = () => {
                         <td className={styles.center}>{d.cantidad_solicitada}</td>
                         <td className={styles.center}>{recibida}</td>
                         <td className={styles.center}>{pendiente}</td>
-                        <td>{d.unidad_venta}</td>
+                        <td>
+                          {d.unidad_venta}
+                          {(d.factor_conversion ?? 1) > 1
+                            ? ` (${d.factor_conversion} u. = ${d.cantidad_solicitada * (d.factor_conversion ?? 1)} u.)`
+                            : ''}
+                        </td>
                         <td className={`${styles.right} ${styles.money}`}>
                           {formatearMoneda(d.precio_unitario_compra)}
                         </td>

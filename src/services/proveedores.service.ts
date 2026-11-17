@@ -37,6 +37,10 @@ export const proveedoresService = {
     return api.patch<Proveedor>(`/proveedores/${id}`, data);
   },
 
+  deleteProveedor: (id: number) => {
+    return api.delete<void>(`/proveedores/${id}`);
+  },
+
   getMarcas: () => {
     return api.get<Marca[]>('/marcas');
   },
