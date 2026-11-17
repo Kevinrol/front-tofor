@@ -5,7 +5,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Save,
   Loader2,
   Search,
   Phone,
@@ -15,41 +14,14 @@ import {
   UserX,
 } from 'lucide-react';
 import styles from '../../styles/crud.module.css';
-import { Modal } from '../../components/Modal/Modal';
 import { Toast } from '../../components/Toast/Toast';
 import { Paginador } from '../../components/Paginador/Paginador';
 import { useToast } from '../../hooks/useToast';
-import {
-  clientesService,
-  Cliente,
-  ClientePayload,
-  TipoCliente,
-} from '../../services/clientes.service';
-import { ventasService, Venta } from '../../services/ventas.service';
-import { formatearMoneda, formatearFechaHora } from '../../utils/formato';
-
-interface FormState {
-  id_cliente?: number;
-  razon_social_nombre: string;
-  nit_ci: string;
-  telefono: string;
-  direccion: string;
-  tipo_cliente: TipoCliente;
-  estado: boolean;
-}
-
-const FORM_VACIO: FormState = {
-  razon_social_nombre: '',
-  nit_ci: '',
-  telefono: '',
-  direccion: '',
-  tipo_cliente: 'Mayorista',
-  estado: true,
-};
+import { clientesService, Cliente } from '../../services/clientes.service';
+import { ClienteFormModal } from './ClienteFormModal';
+import { ClienteHistorialModal } from './ClienteHistorialModal';
 
 type FiltroTipo = 'all' | 'active' | 'inactive';
-
-const TIPOS_REGISTRO: TipoCliente[] = ['Mayorista'];
 
 const POR_PAGINA_INICIAL = 5;
 
@@ -58,27 +30,10 @@ export const Clientes: React.FC = () => {
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(FORM_VACIO);
+  const [clienteEditando, setClienteEditando] = useState<Cliente | null>(null);
   const [clienteHistorial, setClienteHistorial] = useState<Cliente | null>(null);
-  const [ventasCliente, setVentasCliente] = useState<Venta[]>([]);
-  const [loadingHistorial, setLoadingHistorial] = useState(false);
-
-  const verHistorial = async (cliente: Cliente) => {
-    if (!cliente.id_cliente) return;
-    setClienteHistorial(cliente);
-    setLoadingHistorial(true);
-    try {
-      const data = await ventasService.getAll({ id_cliente: cliente.id_cliente });
-      setVentasCliente(data || []);
-    } catch {
-      showToast('No se pudo cargar el historial de compras.', 'error');
-    } finally {
-      setLoadingHistorial(false);
-    }
-  };
 
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<FiltroTipo>('all');
@@ -108,59 +63,24 @@ export const Clientes: React.FC = () => {
   }, [search, filtro]);
 
   const abrirCrear = () => {
-    setForm(FORM_VACIO);
+    setClienteEditando(null);
     setModalOpen(true);
   };
 
   const abrirEditar = (cliente: Cliente) => {
-    setForm({
-      id_cliente: cliente.id_cliente,
-      razon_social_nombre: cliente.razon_social_nombre,
-      nit_ci: cliente.nit_ci,
-      telefono: cliente.telefono ?? '',
-      direccion: cliente.direccion ?? '',
-      tipo_cliente: (cliente.tipo_cliente as TipoCliente) ?? 'Mayorista',
-      estado: cliente.estado,
-    });
+    setClienteEditando(cliente);
     setModalOpen(true);
   };
 
-  const guardar = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!form.razon_social_nombre.trim()) {
-      showToast('El nombre o razón social es obligatorio.', 'error');
-      return;
-    }
-    if (!form.nit_ci.trim()) {
-      showToast('El NIT / CI es obligatorio.', 'error');
-      return;
-    }
+  const cerrarModalForm = () => {
+    setModalOpen(false);
+    setClienteEditando(null);
+  };
 
-    const payload: ClientePayload = {
-      razon_social_nombre: form.razon_social_nombre.trim(),
-      nit_ci: form.nit_ci.trim(),
-      tipo_cliente: form.tipo_cliente,
-      estado: form.estado,
-    };
-    if (form.telefono.trim()) payload.telefono = form.telefono.trim();
-    if (form.direccion.trim()) payload.direccion = form.direccion.trim();
-
-    setSaving(true);
-    try {
-      if (form.id_cliente) {
-        await clientesService.update(form.id_cliente, payload);
-        showToast('Cliente actualizado correctamente.');
-      } else {
-        await clientesService.create(payload);
-        showToast('Cliente registrado correctamente.');
-      }
-      setModalOpen(false);
-      await cargar();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Error al guardar el cliente.', 'error');
-    } finally {
-      setSaving(false);
-    }
+  const handleClienteGuardado = async (mensaje: string) => {
+    showToast(mensaje);
+    cerrarModalForm();
+    await cargar();
   };
 
   const eliminar = async (cliente: Cliente) => {
@@ -356,7 +276,7 @@ export const Clientes: React.FC = () => {
                           type="button"
                           className={styles.iconBtn}
                           title="Historial de compras"
-                          onClick={() => verHistorial(c)}
+                          onClick={() => c.id_cliente && setClienteHistorial(c)}
                         >
                           <Receipt size={15} />
                         </button>
@@ -400,173 +320,20 @@ export const Clientes: React.FC = () => {
         )}
       </section>
 
-      <Modal
+      <ClienteFormModal
         open={modalOpen}
-        title={form.id_cliente ? 'Editar Cliente' : 'Nuevo Cliente'}
-        onClose={() => setModalOpen(false)}
-        width={600}
-        footer={
-          <>
-            <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={() => setModalOpen(false)}>
-              Cancelar
-            </button>
-            <button type="submit" form="form-cliente" className={`${styles.btn} ${styles.btnPrimary}`} disabled={saving}>
-              {saving ? <Loader2 size={16} className={styles.spinner} /> : <Save size={16} />}
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
-          </>
-        }
-      >
-        <form id="form-cliente" onSubmit={guardar} className={styles.formGrid} noValidate>
-          <div className={`${styles.field} ${styles.formGridFull}`}>
-            <label className={styles.fieldLabel} htmlFor="cli-nombre">
-              Nombre o razón social <span className={styles.requiredMark}>*</span>
-            </label>
-            <input
-              id="cli-nombre"
-              className={styles.input}
-              type="text"
-              value={form.razon_social_nombre}
-              onChange={(e) => setForm((prev) => ({ ...prev, razon_social_nombre: e.target.value }))}
-              placeholder="Ej: Librería Central"
-            />
-          </div>
+        cliente={clienteEditando}
+        clientesExistentes={clientes}
+        onClose={cerrarModalForm}
+        onGuardado={handleClienteGuardado}
+        onError={(mensaje) => showToast(mensaje, 'error')}
+      />
 
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="cli-nit">
-              NIT / CI <span className={styles.requiredMark}>*</span>
-            </label>
-            <input
-              id="cli-nit"
-              className={styles.input}
-              type="text"
-              value={form.nit_ci}
-              onChange={(e) => setForm((prev) => ({ ...prev, nit_ci: e.target.value }))}
-              placeholder="Ej: 1029384756"
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="cli-tipo">
-              Tipo de cliente
-            </label>
-            <select
-              id="cli-tipo"
-              className={styles.select}
-              value={form.tipo_cliente}
-              onChange={(e) => setForm((prev) => ({ ...prev, tipo_cliente: e.target.value as TipoCliente }))}
-            >
-              {TIPOS_REGISTRO.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {tipo}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="cli-telefono">
-              Teléfono
-            </label>
-            <input
-              id="cli-telefono"
-              className={styles.input}
-              type="tel"
-              value={form.telefono}
-              onChange={(e) => setForm((prev) => ({ ...prev, telefono: e.target.value }))}
-              placeholder="Ej: 71234567"
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="cli-direccion">
-              Dirección
-            </label>
-            <input
-              id="cli-direccion"
-              className={styles.input}
-              type="text"
-              value={form.direccion}
-              onChange={(e) => setForm((prev) => ({ ...prev, direccion: e.target.value }))}
-              placeholder="Ej: Av. 6 de Marzo #123"
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="cli-estado">
-              Estado
-            </label>
-            <select
-              id="cli-estado"
-              className={styles.select}
-              value={form.estado ? 'true' : 'false'}
-              onChange={(e) => setForm((prev) => ({ ...prev, estado: e.target.value === 'true' }))}
-            >
-              <option value="true">Activo</option>
-              <option value="false">Inactivo</option>
-            </select>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        open={clienteHistorial !== null}
-        title={`Historial de Compras — ${clienteHistorial?.razon_social_nombre ?? ''}`}
+      <ClienteHistorialModal
+        cliente={clienteHistorial}
         onClose={() => setClienteHistorial(null)}
-        width={680}
-      >
-        {loadingHistorial ? (
-          <div className={styles.loadingRow}>
-            <Loader2 size={18} className={styles.spinner} /> Cargando historial...
-          </div>
-        ) : ventasCliente.length === 0 ? (
-          <div className={styles.empty}>
-            <Receipt size={32} color="var(--color-text-placeholder)" />
-            <span className={styles.emptyTitle}>Sin compras registradas</span>
-          </div>
-        ) : (
-          <>
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>N° Venta</th>
-                    <th>Fecha</th>
-                    <th>Método</th>
-                    <th className={styles.right}>Descuento</th>
-                    <th className={styles.right}>Total</th>
-                    <th className={styles.center}>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ventasCliente.map((v) => (
-                    <tr key={v.id_venta}>
-                      <td className={styles.strong}>#{v.id_venta}</td>
-                      <td className={styles.muted}>{formatearFechaHora(v.fecha_hora)}</td>
-                      <td>{v.metodo_pago}</td>
-                      <td className={`${styles.right} ${styles.muted}`}>
-                        {formatearMoneda(v.monto_descuento ?? 0)}
-                      </td>
-                      <td className={`${styles.right} ${styles.money}`}>{formatearMoneda(v.monto_total)}</td>
-                      <td className={styles.center}>
-                        <span className={`${styles.pill} ${styles.pillNeutral}`}>{v.estado_pago}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className={styles.lineTotal}>
-              <span className={styles.lineTotalLabel}>Total Acumulado (sin anuladas)</span>
-              {formatearMoneda(
-                ventasCliente
-                  .filter((v) => v.estado_pago !== 'Anulado')
-                  .reduce((acc, v) => acc + Number(v.monto_total), 0)
-              )}
-            </div>
-          </>
-        )}
-      </Modal>
+        onError={(mensaje) => showToast(mensaje, 'error')}
+      />
     </main>
   );
 };
