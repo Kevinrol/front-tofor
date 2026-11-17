@@ -1,1029 +1,1247 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Building2, IdCard, Shapes, Check, X, Save, 
-  Store, Award, Contact, Phone, MapPin, Info, Clock, RotateCcw,
-  FileText, Search, Plus, Truck, Boxes, CheckCircle2, 
-  AlertCircle, Loader2, Sparkles, Filter
+import {
+  Truck,
+  Building2,
+  Plus,
+  Pencil,
+  Trash2,
+  Save,
+  Loader2,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  MapPin,
+  Phone,
+  Award,
+  Shapes,
+  X,
+  Eye,
+  RotateCcw,
 } from 'lucide-react';
-import styles from './Proveedores.module.css';
+import styles from '../../styles/crud.module.css';
+import { Modal } from '../../components/Modal/Modal';
+import { Toast } from '../../components/Toast/Toast';
 import { Paginador } from '../../components/Paginador/Paginador';
-import { proveedoresService, Proveedor, Marca, LineaProducto } from '../../services/proveedores.service';
+import { useToast } from '../../hooks/useToast';
+import {
+  proveedoresService,
+  Proveedor,
+  Marca,
+  LineaProducto,
+} from '../../services/proveedores.service';
 
-interface ToastState {
-  message: string;
-  type: 'success' | 'error';
+interface FormState {
+  id_proveedor?: number;
+  nit: string;
+  razon_social: string;
+  nombre_contacto: string;
+  telefono_contacto: string;
+  ciudad: string;
+  estado: boolean;
+  marcas: string[];
+  lineas_productos: string[];
 }
 
+interface ErroresForm {
+  nit?: string;
+  razon_social?: string;
+  telefono_contacto?: string;
+}
+
+const FORM_VACIO: FormState = {
+  nit: '',
+  razon_social: '',
+  nombre_contacto: '',
+  telefono_contacto: '',
+  ciudad: '',
+  estado: true,
+  marcas: [],
+  lineas_productos: [],
+};
+
+type FiltroEstado = 'all' | 'active' | 'inactive';
+
+const POR_PAGINA_INICIAL = 6;
+
+const CIUDADES_SUGERIDAS = [
+  'La Paz',
+  'El Alto',
+  'Cochabamba',
+  'Santa Cruz',
+  'Oruro',
+  'Potosí',
+  'Sucre',
+  'Tarija',
+  'Beni',
+  'Pando',
+];
+
 export const Proveedores: React.FC = () => {
-  // Navigation / View Mode
-  const [activeView, setActiveView] = useState<'form' | 'directory'>('form');
+  const { toast, showToast, closeToast } = useToast();
 
-  // Form State
-  const [formData, setFormData] = useState<Proveedor>({
-    nit: '',
-    razon_social: '',
-    nombre_contacto: '',
-    telefono_contacto: '',
-    ciudad: '',
-    estado: true,
-    marcas: [],
-    lineas_productos: []
-  });
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [marcas, setMarcas] = useState<Marca[]>([]);
+  const [lineas, setLineas] = useState<LineaProducto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [newBrandInput, setNewBrandInput] = useState('');
-  const [newLineaInput, setNewLineaInput] = useState('');
-  const [addingBrand, setAddingBrand] = useState(false);
-  const [addingLinea, setAddingLinea] = useState(false);
-  
-  // Data State
-  const [proveedoresList, setProveedoresList] = useState<Proveedor[]>([]);
-  const [marcasList, setMarcasList] = useState<Marca[]>([]);
-  const [lineasList, setLineasList] = useState<LineaProducto[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Modales
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
+  const [proveedorDetalle, setProveedorDetalle] = useState<Proveedor | null>(null);
 
-  // Search & Filters
-  const [quickSearch, setQuickSearch] = useState('');
-  const [directorySearch, setDirectorySearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [paginaDirectorio, setPaginaDirectorio] = useState(1);
-  const [porPaginaDirectorio, setPorPaginaDirectorio] = useState(6);
+  // Formulario y validaciones
+  const [form, setForm] = useState<FormState>(FORM_VACIO);
+  const [errores, setErrores] = useState<ErroresForm>({});
 
-  // Toast Notification State
-  const [toast, setToast] = useState<ToastState | null>(null);
+  // Inputs para añadir marcas/líneas al vuelo
+  const [nuevaMarcaInput, setNuevaMarcaInput] = useState('');
+  const [nuevaLineaInput, setNuevaLineaInput] = useState('');
+  const [guardandoMarca, setGuardandoMarca] = useState(false);
+  const [guardandoLinea, setGuardandoLinea] = useState(false);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 4000);
-  };
+  // Filtros y paginación
+  const [search, setSearch] = useState('');
+  const [filtro, setFiltro] = useState<FiltroEstado>('all');
+  const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(POR_PAGINA_INICIAL);
 
-  useEffect(() => {
-    fetchProveedores();
-    fetchMarcas();
-    fetchLineas();
-  }, []);
+  const hayErrores = Object.values(errores).some(Boolean);
 
-  const fetchProveedores = async () => {
-    try {
-      const data = await proveedoresService.getProveedores();
-      setProveedoresList(data || []);
-    } catch (error) {
-      console.error('Error fetching proveedores:', error);
-    }
-  };
-
-  const fetchMarcas = async () => {
-    try {
-      const data = await proveedoresService.getMarcas();
-      setMarcasList(data || []);
-    } catch (error) {
-      console.error('Error fetching marcas:', error);
-    }
-  };
-
-  const fetchLineas = async () => {
-    try {
-      const data = await proveedoresService.getLineasProducto();
-      setLineasList(data || []);
-    } catch (error) {
-      console.error('Error fetching lineas:', error);
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleLineaToggle = (linea: string) => {
-    setFormData(prev => {
-      const isSelected = prev.lineas_productos.includes(linea);
-      return {
-        ...prev,
-        lineas_productos: isSelected 
-          ? prev.lineas_productos.filter(l => l !== linea)
-          : [...prev.lineas_productos, linea]
-      };
-    });
-  };
-
-  const handleMarcaToggle = (marca: string) => {
-    setFormData(prev => {
-      const isSelected = prev.marcas.includes(marca);
-      return {
-        ...prev,
-        marcas: isSelected 
-          ? prev.marcas.filter(m => m !== marca)
-          : [...prev.marcas, marca]
-      };
-    });
-  };
-
-  const handleAddCustomBrand = async () => {
-    const trimmed = newBrandInput.trim();
-    if (!trimmed) return;
-
-    if (marcasList.some(m => m.nombre_marca.toLowerCase() === trimmed.toLowerCase())) {
-      if (!formData.marcas.includes(trimmed)) {
-        setFormData(prev => ({ ...prev, marcas: [...prev.marcas, trimmed] }));
-      }
-      setNewBrandInput('');
-      showToast(`La marca "${trimmed}" ya existía y fue vinculada.`, 'success');
-      return;
-    }
-
-    setAddingBrand(true);
-    try {
-      const newMarca = await proveedoresService.createMarca(trimmed);
-      setMarcasList(prev => [...prev, newMarca]);
-      setFormData(prev => ({
-        ...prev,
-        marcas: [...prev.marcas, newMarca.nombre_marca]
-      }));
-      setNewBrandInput('');
-      showToast(`Marca "${newMarca.nombre_marca}" creada y agregada con éxito.`);
-    } catch (error) {
-      console.error('Error creating marca:', error);
-      showToast('No se pudo registrar la marca.', 'error');
-    } finally {
-      setAddingBrand(false);
-    }
-  };
-
-  const handleAddCustomLinea = async () => {
-    const trimmed = newLineaInput.trim();
-    if (!trimmed) return;
-
-    if (lineasList.some(l => l.nombre_linea.toLowerCase() === trimmed.toLowerCase())) {
-      if (!formData.lineas_productos.includes(trimmed)) {
-        setFormData(prev => ({ ...prev, lineas_productos: [...prev.lineas_productos, trimmed] }));
-      }
-      setNewLineaInput('');
-      showToast(`La línea "${trimmed}" ya existía y fue seleccionada.`, 'success');
-      return;
-    }
-
-    setAddingLinea(true);
-    try {
-      const newLinea = await proveedoresService.createLineaProducto(trimmed);
-      setLineasList(prev => [...prev, newLinea]);
-      setFormData(prev => ({
-        ...prev,
-        lineas_productos: [...prev.lineas_productos, newLinea.nombre_linea]
-      }));
-      setNewLineaInput('');
-      showToast(`Línea "${newLinea.nombre_linea}" creada y agregada con éxito.`);
-    } catch (error) {
-      console.error('Error creating linea:', error);
-      showToast('No se pudo registrar la línea de producto.', 'error');
-    } finally {
-      setAddingLinea(false);
-    }
-  };
-
-  const validateForm = (): boolean => {
-    if (!formData.nit.trim()) {
-      showToast('El NIT es obligatorio para facturación y compras.', 'error');
-      return false;
-    }
-    if (!/^[\d-]+$/.test(formData.nit.trim())) {
-      showToast('El NIT debe contener únicamente números y guiones.', 'error');
-      return false;
-    }
-    if (!formData.razon_social.trim()) {
-      showToast('La Razón Social o Nombre Comercial es obligatoria.', 'error');
-      return false;
-    }
-    if (formData.telefono_contacto.trim()) {
-      if (!/^\+?[\d\s-]{7,15}$/.test(formData.telefono_contacto.trim())) {
-        showToast('El formato del teléfono no es válido (7 a 15 dígitos).', 'error');
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!validateForm()) return;
-
+  const cargarDatos = async () => {
     setLoading(true);
     try {
-      const { id_proveedor, ...payload } = formData;
-      if (id_proveedor) {
-        await proveedoresService.updateProveedor(id_proveedor, payload);
-        showToast(`Proveedor "${formData.razon_social}" actualizado exitosamente.`, 'success');
-      } else {
-        await proveedoresService.createProveedor(payload);
-        showToast(`Proveedor "${formData.razon_social}" registrado exitosamente.`, 'success');
-      }
-      handleReset();
-      await fetchProveedores();
+      const [provs, marcasData, lineasData] = await Promise.all([
+        proveedoresService.getProveedores(),
+        proveedoresService.getMarcas(),
+        proveedoresService.getLineasProducto(),
+      ]);
+      setProveedores(provs || []);
+      setMarcas(marcasData || []);
+      setLineas(lineasData || []);
     } catch (error) {
-      console.error('Error saving proveedor:', error);
-      showToast('Error al guardar el proveedor en el servidor.', 'error');
+      console.error(error);
+      showToast('Error al cargar la lista de proveedores y catálogos.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setFormData({
-      id_proveedor: undefined,
-      nit: '',
-      razon_social: '',
-      nombre_contacto: '',
-      telefono_contacto: '',
-      ciudad: '',
-      estado: true,
-      marcas: [],
-      lineas_productos: []
-    });
-    setNewBrandInput('');
-    setNewLineaInput('');
+  useEffect(() => {
+    cargarDatos();
+  }, []);
+
+  // --------------------------------------------------------------------------
+  // Validaciones en tiempo real
+  // --------------------------------------------------------------------------
+  const validarNitEnTiempoReal = (
+    nit: string,
+    idActual?: number,
+  ): string | undefined => {
+    const limpio = nit.trim();
+    if (!limpio) {
+      return undefined; // Si está en blanco no mostrar error mientras escribe
+    }
+    if (limpio.length > 30) {
+      return 'El NIT/CI no puede exceder 30 caracteres.';
+    }
+    if (/\s/.test(limpio)) {
+      return 'El NIT/CI no debe contener espacios intermedios.';
+    }
+    if (!/^[\d-]+$/.test(limpio)) {
+      return 'El NIT/CI debe contener únicamente números y guiones.';
+    }
+    const repetido = proveedores.find(
+      (p) =>
+        p.nit &&
+        p.nit.trim().toLowerCase() === limpio.toLowerCase() &&
+        p.id_proveedor !== idActual,
+    );
+    if (repetido) {
+      return `NIT/CI ya registrado en: "${repetido.razon_social}" (${repetido.estado ? 'Activo' : 'Inactivo'}).`;
+    }
+    return undefined;
   };
 
-  // Inspect existing supplier in preview card
-  const handleSelectSupplierForPreview = (supplier: Proveedor) => {
-    setFormData({
-      id_proveedor: supplier.id_proveedor,
-      nit: supplier.nit,
-      razon_social: supplier.razon_social,
-      nombre_contacto: supplier.nombre_contacto || '',
-      telefono_contacto: supplier.telefono_contacto || '',
-      ciudad: supplier.ciudad || '',
-      estado: supplier.estado,
-      marcas: supplier.marcas || [],
-      lineas_productos: supplier.lineas_productos || []
-    });
-    setActiveView('form');
-    showToast(`Editando proveedor "${supplier.razon_social}".`, 'success');
+  const validarTelefonoEnTiempoReal = (telefono: string): string | undefined => {
+    const limpio = telefono.trim();
+    if (!limpio) return undefined;
+    if (!/^\+?[\d\s-]{7,15}$/.test(limpio)) {
+      return 'El formato del teléfono no es válido (7 a 15 dígitos).';
+    }
+    return undefined;
   };
 
-  // Metrics calculation
-  const totalProveedores = proveedoresList.length;
-  const activosCount = proveedoresList.filter(p => p.estado).length;
-  const uniqueCitiesCount = useMemo(() => {
-    const cities = proveedoresList.map(p => p.ciudad?.trim()).filter(Boolean);
-    return new Set(cities).size;
-  }, [proveedoresList]);
+  const actualizarNit = (valor: string) => {
+    setForm((prev) => ({ ...prev, nit: valor }));
+    const error = validarNitEnTiempoReal(valor, form.id_proveedor);
+    setErrores((prev) => ({ ...prev, nit: error }));
+  };
 
-  // Unique display tags
-  const displayMarcas = Array.from(new Set([...marcasList.map(m => m.nombre_marca), ...formData.marcas]));
-  const displayLineas = Array.from(new Set([...lineasList.map(l => l.nombre_linea), ...formData.lineas_productos]));
+  const actualizarTelefono = (valor: string) => {
+    setForm((prev) => ({ ...prev, telefono_contacto: valor }));
+    const error = validarTelefonoEnTiempoReal(valor);
+    setErrores((prev) => ({ ...prev, telefono_contacto: error }));
+  };
 
-  // Filtered lists
-  const filteredQuickList = useMemo(() => {
-    if (!quickSearch.trim()) return proveedoresList.slice(0, 5);
-    const q = quickSearch.toLowerCase();
-    return proveedoresList.filter(p => 
-      p.razon_social.toLowerCase().includes(q) || 
-      p.nit.includes(q) || 
-      p.ciudad?.toLowerCase().includes(q)
-    ).slice(0, 6);
-  }, [proveedoresList, quickSearch]);
+  const validarFormulario = (): boolean => {
+    const nuevos: ErroresForm = {};
 
-  const filteredDirectory = useMemo(() => {
-    return proveedoresList.filter(p => {
-      const matchesSearch = !directorySearch.trim() || 
-        p.razon_social.toLowerCase().includes(directorySearch.toLowerCase()) ||
-        p.nit.includes(directorySearch) ||
-        (p.ciudad && p.ciudad.toLowerCase().includes(directorySearch.toLowerCase())) ||
-        (p.nombre_contacto && p.nombre_contacto.toLowerCase().includes(directorySearch.toLowerCase()));
+    if (!form.razon_social.trim()) {
+      nuevos.razon_social = 'La Razón Social o Nombre Comercial es obligatoria.';
+    }
 
-      const matchesStatus = 
-        statusFilter === 'all' ? true :
-        statusFilter === 'active' ? p.estado :
-        !p.estado;
+    if (!form.nit.trim()) {
+      nuevos.nit = 'El NIT/CI es obligatorio para registrar un proveedor.';
+    } else {
+      const errNit = validarNitEnTiempoReal(form.nit, form.id_proveedor);
+      if (errNit) nuevos.nit = errNit;
+    }
 
-      return matchesSearch && matchesStatus;
+    if (form.telefono_contacto.trim()) {
+      const errTel = validarTelefonoEnTiempoReal(form.telefono_contacto);
+      if (errTel) nuevos.telefono_contacto = errTel;
+    }
+
+    setErrores(nuevos);
+    return Object.keys(nuevos).length === 0;
+  };
+
+  // --------------------------------------------------------------------------
+  // Manejo de Marcas y Líneas en el formulario
+  // --------------------------------------------------------------------------
+  const agregarMarcaAForm = (marcaNombre: string) => {
+    const limpio = marcaNombre.trim();
+    if (!limpio) return;
+    if (!form.marcas.some((m) => m.toLowerCase() === limpio.toLowerCase())) {
+      setForm((prev) => ({ ...prev, marcas: [...prev.marcas, limpio] }));
+    }
+  };
+
+  const quitarMarcaDeForm = (marcaNombre: string) => {
+    setForm((prev) => ({
+      ...prev,
+      marcas: prev.marcas.filter((m) => m.toLowerCase() !== marcaNombre.toLowerCase()),
+    }));
+  };
+
+  const agregarLineaAForm = (lineaNombre: string) => {
+    const limpio = lineaNombre.trim();
+    if (!limpio) return;
+    if (!form.lineas_productos.some((l) => l.toLowerCase() === limpio.toLowerCase())) {
+      setForm((prev) => ({ ...prev, lineas_productos: [...prev.lineas_productos, limpio] }));
+    }
+  };
+
+  const quitarLineaDeForm = (lineaNombre: string) => {
+    setForm((prev) => ({
+      ...prev,
+      lineas_productos: prev.lineas_productos.filter((l) => l.toLowerCase() !== lineaNombre.toLowerCase()),
+    }));
+  };
+
+  const crearYNuevaMarca = async () => {
+    const limpio = nuevaMarcaInput.trim();
+    if (!limpio) return;
+
+    if (marcas.some((m) => m.nombre_marca.toLowerCase() === limpio.toLowerCase())) {
+      agregarMarcaAForm(limpio);
+      setNuevaMarcaInput('');
+      showToast(`La marca "${limpio}" ya existía y fue vinculada.`);
+      return;
+    }
+
+    setGuardandoMarca(true);
+    try {
+      const nueva = await proveedoresService.createMarca(limpio);
+      setMarcas((prev) => [...prev, nueva]);
+      agregarMarcaAForm(nueva.nombre_marca);
+      setNuevaMarcaInput('');
+      showToast(`Marca "${nueva.nombre_marca}" creada y asociada.`);
+    } catch (error) {
+      console.error(error);
+      showToast('No se pudo registrar la marca en el servidor.', 'error');
+    } finally {
+      setGuardandoMarca(false);
+    }
+  };
+
+  const crearYNuevaLinea = async () => {
+    const limpio = nuevaLineaInput.trim();
+    if (!limpio) return;
+
+    if (lineas.some((l) => l.nombre_linea.toLowerCase() === limpio.toLowerCase())) {
+      agregarLineaAForm(limpio);
+      setNuevaLineaInput('');
+      showToast(`La línea "${limpio}" ya existía y fue vinculada.`);
+      return;
+    }
+
+    setGuardandoLinea(true);
+    try {
+      const nueva = await proveedoresService.createLineaProducto(limpio);
+      setLineas((prev) => [...prev, nueva]);
+      agregarLineaAForm(nueva.nombre_linea);
+      setNuevaLineaInput('');
+      showToast(`Línea "${nueva.nombre_linea}" creada y asociada.`);
+    } catch (error) {
+      console.error(error);
+      showToast('No se pudo registrar la línea en el servidor.', 'error');
+    } finally {
+      setGuardandoLinea(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Guardar y Reset
+  // --------------------------------------------------------------------------
+  const abrirCrear = () => {
+    setForm(FORM_VACIO);
+    setErrores({});
+    setNuevaMarcaInput('');
+    setNuevaLineaInput('');
+    setModalOpen(true);
+  };
+
+  const abrirEditar = (p: Proveedor) => {
+    setForm({
+      id_proveedor: p.id_proveedor,
+      nit: p.nit ?? '',
+      razon_social: p.razon_social ?? '',
+      nombre_contacto: p.nombre_contacto ?? '',
+      telefono_contacto: p.telefono_contacto ?? '',
+      ciudad: p.ciudad ?? '',
+      estado: p.estado ?? true,
+      marcas: p.marcas ? [...p.marcas] : [],
+      lineas_productos: p.lineas_productos ? [...p.lineas_productos] : [],
     });
-  }, [proveedoresList, directorySearch, statusFilter]);
+    setErrores({});
+    setNuevaMarcaInput('');
+    setNuevaLineaInput('');
+    setModalOpen(true);
+  };
+
+  const abrirDetalle = (p: Proveedor) => {
+    setProveedorDetalle(p);
+    setModalDetalleOpen(true);
+  };
+
+  const guardar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validarFormulario()) return;
+
+    setSaving(true);
+    try {
+      const { id_proveedor, ...payload } = form;
+      if (id_proveedor) {
+        await proveedoresService.updateProveedor(id_proveedor, payload);
+        showToast(`Proveedor "${form.razon_social}" actualizado exitosamente.`);
+      } else {
+        await proveedoresService.createProveedor(payload);
+        showToast(`Proveedor "${form.razon_social}" registrado exitosamente.`);
+      }
+      setModalOpen(false);
+      await cargarDatos();
+    } catch (error) {
+      console.error(error);
+      showToast('Error al guardar el proveedor en el servidor.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const alternarEstado = async (p: Proveedor) => {
+    if (!p.id_proveedor) return;
+    const nuevoEstado = !p.estado;
+    const accion = nuevoEstado ? 'reactivar' : 'desactivar';
+    if (!window.confirm(`¿Seguro que deseas ${accion} al proveedor "${p.razon_social}"?`)) {
+      return;
+    }
+
+    try {
+      await proveedoresService.updateProveedor(p.id_proveedor, {
+        nit: p.nit,
+        razon_social: p.razon_social,
+        nombre_contacto: p.nombre_contacto || '',
+        telefono_contacto: p.telefono_contacto || '',
+        ciudad: p.ciudad || '',
+        estado: nuevoEstado,
+        marcas: p.marcas || [],
+        lineas_productos: p.lineas_productos || [],
+      });
+      showToast(`Proveedor ${nuevoEstado ? 'reactivado' : 'desactivado'} correctamente.`);
+      await cargarDatos();
+    } catch (error) {
+      console.error(error);
+      showToast(`Error al ${accion} el proveedor.`, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Filtros y KPIs
+  // --------------------------------------------------------------------------
+  const filtrados = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return proveedores.filter((p) => {
+      const coincide =
+        !q ||
+        p.razon_social.toLowerCase().includes(q) ||
+        (p.nit ?? '').toLowerCase().includes(q) ||
+        (p.ciudad ?? '').toLowerCase().includes(q) ||
+        (p.nombre_contacto ?? '').toLowerCase().includes(q) ||
+        (p.marcas ?? []).some((m) => m.toLowerCase().includes(q)) ||
+        (p.lineas_productos ?? []).some((l) => l.toLowerCase().includes(q));
+
+      const porEstado =
+        filtro === 'all' ? true : filtro === 'active' ? p.estado : !p.estado;
+
+      return coincide && porEstado;
+    });
+  }, [proveedores, search, filtro]);
 
   useEffect(() => {
-    setPaginaDirectorio(1);
-  }, [directorySearch, statusFilter]);
+    setPagina(1);
+  }, [search, filtro]);
 
-  const totalPaginasDirectorio = Math.max(1, Math.ceil(filteredDirectory.length / porPaginaDirectorio));
-  const paginaActualDirectorio = Math.min(paginaDirectorio, totalPaginasDirectorio);
-  const directoryVisibles = filteredDirectory.slice(
-    (paginaActualDirectorio - 1) * porPaginaDirectorio,
-    paginaActualDirectorio * porPaginaDirectorio
-  );
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visibles = filtrados.slice((paginaActual - 1) * porPagina, paginaActual * porPagina);
+
+  const totalActivos = proveedores.filter((p) => p.estado).length;
+  const ciudadesCount = useMemo(() => {
+    const c = proveedores.map((p) => p.ciudad?.trim()).filter(Boolean);
+    return new Set(c).size;
+  }, [proveedores]);
+
+  // Marcas y Líneas disponibles para selector en el modal
+  const marcasDisponibles = useMemo(() => {
+    const seleccionadas = new Set(form.marcas.map((m) => m.toLowerCase()));
+    return marcas.filter((m) => !seleccionadas.has(m.nombre_marca.toLowerCase()));
+  }, [marcas, form.marcas]);
+
+  const lineasDisponibles = useMemo(() => {
+    const seleccionadas = new Set(form.lineas_productos.map((l) => l.toLowerCase()));
+    return lineas.filter((l) => !seleccionadas.has(l.nombre_linea.toLowerCase()));
+  }, [lineas, form.lineas_productos]);
 
   return (
     <main className={styles.scrollArea}>
-      {/* Toast Notification */}
-      {toast && (
-        <div className={styles.toastContainer}>
-          <div className={`${styles.toast} ${toast.type === 'success' ? styles.toastSuccess : styles.toastError}`}>
-            {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-            <span>{toast.message}</span>
-            <button 
-              onClick={() => setToast(null)} 
-              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+      <Toast toast={toast} onClose={closeToast} />
 
-      {/* Header Section */}
+      {/* Encabezado */}
       <div className={styles.pageHeader}>
         <div className={styles.pageTitleGroup}>
           <div className={styles.titleRow}>
-            <h1 className={styles.title}>Gestión de Proveedores</h1>
-            <span className={styles.badge}>
-              <Truck size={14} />
-              Aprovisionamiento & Catálogo
-            </span>
+            <div
+              style={{
+                background: '#E0EDFF',
+                color: '#2563EB',
+                padding: '10px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Truck size={24} />
+            </div>
+            <div>
+              <h1 className={styles.title}>Proveedores & Distribuidores</h1>
+              <p className={styles.subtitle}>
+                Directorio de proveedores oficiales, marcas y líneas para el abastecimiento continuo de librería y material escolar.
+              </p>
+            </div>
           </div>
-          <p className={styles.subtitle}>
-            Directorio de distribuidores oficiales y alta de marcas para el abastecimiento continuo de librería y material escolar.
-          </p>
         </div>
-        
-        <div className={styles.headerActions}>
-          <div className={styles.viewSwitcher} role="tablist">
-            <button 
-              role="tab"
-              aria-selected={activeView === 'form'}
-              className={`${styles.viewTab} ${activeView === 'form' ? styles.viewTabActive : ''}`}
-              onClick={() => setActiveView('form')}
-            >
-              <FileText size={15} />
-              Registro & Ficha
-            </button>
-            <button 
-              role="tab"
-              aria-selected={activeView === 'directory'}
-              className={`${styles.viewTab} ${activeView === 'directory' ? styles.viewTabActive : ''}`}
-              onClick={() => setActiveView('directory')}
-            >
-              <Building2 size={15} />
-              Directorio
-              <span className={styles.tabCountBadge}>{totalProveedores}</span>
-            </button>
-          </div>
 
-          {activeView === 'form' ? (
-            <>
-              <button type="button" className={styles.btnCancel} onClick={handleReset}>
-                <RotateCcw size={15} /> Limpiar
-              </button>
-              <button 
-                type="button" 
-                className={styles.btnSave} 
-                onClick={() => handleSubmit()} 
-                disabled={loading}
-              >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {loading ? 'Guardando...' : formData.id_proveedor ? 'Actualizar Proveedor' : 'Guardar Proveedor'}
-              </button>
-            </>
-          ) : (
-            <button 
-              type="button" 
-              className={styles.btnSave} 
-              onClick={() => { handleReset(); setActiveView('form'); }}
-            >
-              <Plus size={16} />
-              Nuevo Proveedor
-            </button>
-          )}
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={abrirCrear}
+          >
+            <Plus size={16} /> Nuevo Proveedor
+          </button>
         </div>
       </div>
 
-      {/* Dynamic KPI Cards */}
-      <section className={styles.kpiGrid} aria-label="Métricas de Proveedores">
+      {/* Tarjetas KPI */}
+      <div className={styles.kpiGrid}>
         <div className={styles.kpiCard}>
-          <div className={`${styles.kpiLeftBorder} ${styles.orange}`} />
-          <div className={`${styles.kpiIcon} ${styles.orange}`}>
-            <Store size={22} />
+          <div className={`${styles.kpiIcon} ${styles.accentBlue}`}>
+            <Truck size={22} />
           </div>
           <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Proveedores Totales</span>
-            <span className={styles.kpiValue}>{totalProveedores}</span>
-            <span className={styles.kpiSubtext}>{activosCount} habilitados para compras</span>
+            <span className={styles.kpiLabel}>Total Proveedores</span>
+            <span className={styles.kpiValue}>{proveedores.length}</span>
+            <span className={styles.kpiSubtext}>Registrados en el sistema</span>
           </div>
         </div>
-        
+
         <div className={styles.kpiCard}>
-          <div className={`${styles.kpiLeftBorder} ${styles.green}`} />
-          <div className={`${styles.kpiIcon} ${styles.green}`}>
+          <div className={`${styles.kpiIcon} ${styles.accentGreen}`}>
+            <CheckCircle2 size={22} />
+          </div>
+          <div className={styles.kpiContent}>
+            <span className={styles.kpiLabel}>Proveedores Activos</span>
+            <span className={styles.kpiValue}>{totalActivos}</span>
+            <span className={styles.kpiSubtext}>Habilitados para órdenes</span>
+          </div>
+        </div>
+
+        <div className={styles.kpiCard}>
+          <div className={`${styles.kpiIcon} ${styles.accentPurple}`}>
             <Award size={22} />
           </div>
           <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Marcas Homologadas</span>
-            <span className={styles.kpiValue}>{marcasList.length}</span>
-            <span className={styles.kpiSubtext}>Disponibles en catálogo escolar</span>
+            <span className={styles.kpiLabel}>Marcas Vinculadas</span>
+            <span className={styles.kpiValue}>{marcas.length}</span>
+            <span className={styles.kpiSubtext}>En catálogo comercial</span>
           </div>
         </div>
 
         <div className={styles.kpiCard}>
-          <div className={`${styles.kpiLeftBorder} ${styles.purple}`} />
-          <div className={`${styles.kpiIcon} ${styles.purple}`}>
-            <Boxes size={22} />
-          </div>
-          <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Líneas de Productos</span>
-            <span className={styles.kpiValue}>{lineasList.length}</span>
-            <span className={styles.kpiSubtext}>Rubros de papelería y arte</span>
-          </div>
-        </div>
-
-        <div className={styles.kpiCard}>
-          <div className={`${styles.kpiLeftBorder} ${styles.blue}`} />
-          <div className={`${styles.kpiIcon} ${styles.blue}`}>
+          <div className={`${styles.kpiIcon} ${styles.accentOrange}`}>
             <MapPin size={22} />
           </div>
           <div className={styles.kpiContent}>
-            <span className={styles.kpiLabel}>Cobertura Geográfica</span>
-            <span className={styles.kpiValue}>{uniqueCitiesCount > 0 ? `${uniqueCitiesCount} Ciudades` : 'Regional'}</span>
-            <span className={styles.kpiSubtext}>Red de distribución activa</span>
+            <span className={styles.kpiLabel}>Ciudades de Origen</span>
+            <span className={styles.kpiValue}>{ciudadesCount}</span>
+            <span className={styles.kpiSubtext}>Sedes de distribución</span>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Main Content: Form View vs Directory View */}
-      {activeView === 'form' ? (
-        <div className={styles.mainGrid}>
-          {/* Form Column */}
-          <form className={styles.formSection} onSubmit={handleSubmit} noValidate>
-            
-            {/* Box 1: Empresa & NIT */}
-            <section className={styles.formGroup}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionIcon}><Building2 size={20} /></div>
-                <div className={styles.sectionTitleGroup}>
-                  <h2 className={styles.sectionTitle}>Identificación Fiscal y Comercial</h2>
-                  <span className={styles.sectionSubtitle}>Datos mercantiles oficiales para órdenes de compra y facturación.</span>
-                </div>
-                <span className={styles.sectionNote}>* Obligatorios</span>
-              </div>
-
-              <div className={styles.inputGrid}>
-                <div className={styles.inputWrapper}>
-                  <div className={styles.inputHeader}>
-                    <label htmlFor="nit" className={styles.inputLabel}>
-                      NIT / Identificación <span className={styles.requiredMark}>*</span>
-                    </label>
-                    <span className={styles.inputHint}>Números y guiones</span>
-                  </div>
-                  <div className={styles.inputField}>
-                    <FileText size={16} color="var(--color-text-placeholder)" />
-                    <input 
-                      id="nit"
-                      type="text" 
-                      name="nit"
-                      value={formData.nit}
-                      onChange={handleInputChange}
-                      placeholder="Ej: 1029384756-0" 
-                      maxLength={20}
-                      autoComplete="off"
-                      required
-                    />
-                  </div>
-                  <span className={styles.inputDesc}>Número tributario oficial del proveedor para comprobantes.</span>
-                </div>
-                
-                <div className={styles.inputWrapper}>
-                  <div className={styles.inputHeader}>
-                    <label htmlFor="razon_social" className={styles.inputLabel}>
-                      Razón Social o Empresa <span className={styles.requiredMark}>*</span>
-                    </label>
-                    <span className={styles.inputHint}>Máx. 60 car.</span>
-                  </div>
-                  <div className={styles.inputField}>
-                    <Building2 size={16} color="var(--color-text-placeholder)" />
-                    <input 
-                      id="razon_social"
-                      type="text" 
-                      name="razon_social"
-                      value={formData.razon_social}
-                      onChange={handleInputChange}
-                      placeholder="Ej: Distribuidora Escolar Papelera S.A." 
-                      maxLength={60}
-                      required
-                    />
-                  </div>
-                  <span className={styles.inputDesc}>Nombre formal registrado ante las autoridades fiscales.</span>
-                </div>
-              </div>
-
-              {/* Status Switch (iOS / Modern toggle) */}
-              <div className={styles.statusRow}>
-                <div className={styles.statusInfo}>
-                  <span className={styles.statusLabel}>Estado Operativo</span>
-                  <span className={styles.statusSubtext}>
-                    Determina si este proveedor está habilitado para recibir órdenes de compra inmediatas.
-                  </span>
-                </div>
-                <div 
-                  className={styles.toggleSwitch} 
-                  onClick={() => setFormData(prev => ({ ...prev, estado: !prev.estado }))}
-                  role="switch"
-                  aria-checked={formData.estado}
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      e.preventDefault();
-                      setFormData(prev => ({ ...prev, estado: !prev.estado }));
-                    }
-                  }}
-                >
-                  <span className={`${styles.statusBadge} ${formData.estado ? styles.statusBadgeActive : styles.statusBadgeInactive}`}>
-                    <span className={styles.statusDot} />
-                    {formData.estado ? 'Activo' : 'Inactivo'}
-                  </span>
-                  <div className={`${styles.switchTrack} ${formData.estado ? styles.switchTrackActive : ''}`}>
-                    <div className={`${styles.switchThumb} ${formData.estado ? styles.switchThumbActive : ''}`} />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Box 2: Contacto y Ciudad */}
-            <section className={styles.formGroup}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionIcon}><IdCard size={20} /></div>
-                <div className={styles.sectionTitleGroup}>
-                  <h2 className={styles.sectionTitle}>Contacto y Localización</h2>
-                  <span className={styles.sectionSubtitle}>Preventista asignado, teléfono para pedidos y sede de despacho.</span>
-                </div>
-              </div>
-
-              <div className={styles.inputGrid3}>
-                <div className={styles.inputWrapper}>
-                  <div className={styles.inputHeader}>
-                    <label htmlFor="nombre_contacto" className={styles.inputLabel}>Nombre del Contacto</label>
-                    <span className={styles.inputHint}>Opcional</span>
-                  </div>
-                  <div className={styles.inputField}>
-                    <Contact size={16} color="var(--color-text-placeholder)" />
-                    <input 
-                      id="nombre_contacto"
-                      type="text" 
-                      name="nombre_contacto"
-                      value={formData.nombre_contacto}
-                      onChange={handleInputChange}
-                      placeholder="Ej: Carlos Valenzuela" 
-                    />
-                  </div>
-                </div>
-                
-                <div className={styles.inputWrapper}>
-                  <div className={styles.inputHeader}>
-                    <label htmlFor="telefono_contacto" className={styles.inputLabel}>Teléfono / WhatsApp</label>
-                    <span className={styles.inputHint}>Para coordinación</span>
-                  </div>
-                  <div className={styles.inputField}>
-                    <Phone size={16} color="var(--color-text-placeholder)" />
-                    <input 
-                      id="telefono_contacto"
-                      type="tel" 
-                      name="telefono_contacto"
-                      value={formData.telefono_contacto}
-                      onChange={handleInputChange}
-                      placeholder="Ej: 76543210" 
-                    />
-                  </div>
-                </div>
-
-                <div className={styles.inputWrapper}>
-                  <div className={styles.inputHeader}>
-                    <label htmlFor="ciudad" className={styles.inputLabel}>Ciudad o Sede</label>
-                    <span className={styles.inputHint}>Ubicación</span>
-                  </div>
-                  <div className={styles.inputField}>
-                    <MapPin size={16} color="var(--color-text-placeholder)" />
-                    <input 
-                      id="ciudad"
-                      type="text" 
-                      name="ciudad"
-                      list="ciudades-sugeridas"
-                      value={formData.ciudad}
-                      onChange={handleInputChange}
-                      placeholder="Ej: El Alto / La Paz" 
-                    />
-                    <datalist id="ciudades-sugeridas">
-                      <option value="El Alto" />
-                      <option value="La Paz" />
-                      <option value="Cochabamba" />
-                      <option value="Santa Cruz" />
-                      <option value="Oruro" />
-                      <option value="Potosí" />
-                    </datalist>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Box 3: Líneas de Productos */}
-            <section className={styles.formGroup}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionIcon}><Shapes size={20} /></div>
-                <div className={styles.sectionTitleGroup}>
-                  <h2 className={styles.sectionTitle}>Líneas de Productos Abastecidas</h2>
-                  <span className={styles.sectionSubtitle}>Selecciona las áreas o rubros escolares que surte este distribuidor.</span>
-                </div>
-                <span className={styles.sectionNote}>
-                  {formData.lineas_productos.length} seleccionadas
-                </span>
-              </div>
-
-              <div className={styles.checkboxGrid}>
-                {displayLineas.map(linea => {
-                  const isChecked = formData.lineas_productos.includes(linea);
-                  return (
-                    <div 
-                      key={linea} 
-                      className={`${styles.checkboxItem} ${isChecked ? styles.checkboxItemSelected : ''}`}
-                      onClick={() => handleLineaToggle(linea)}
-                      role="checkbox"
-                      aria-checked={isChecked}
-                      tabIndex={0}
-                    >
-                      <span className={styles.checkboxLabel}>{linea}</span>
-                      {isChecked && <Check size={16} color="var(--color-primary)" />}
-                    </div>
-                  );
-                })}
-              </div>
-              
-              <div className={styles.brandAddRow}>
-                <input 
-                  type="text" 
-                  className={styles.brandInput} 
-                  placeholder="Crear nueva línea (ej: Cartulinas, Témperas)..." 
-                  value={newLineaInput}
-                  onChange={(e) => setNewLineaInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCustomLinea())}
-                />
-                <button 
-                  type="button" 
-                  className={styles.brandAddBtn} 
-                  onClick={handleAddCustomLinea}
-                  disabled={addingLinea}
-                >
-                  <Plus size={14} />
-                  {addingLinea ? 'Añadiendo...' : 'Añadir Línea'}
-                </button>
-              </div>
-            </section>
-
-            {/* Box 4: Marcas Oficiales */}
-            <section className={styles.formGroup}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionIcon}><Award size={20} /></div>
-                <div className={styles.sectionTitleGroup}>
-                  <h2 className={styles.sectionTitle}>Marcas Comerciales Suministradas</h2>
-                  <span className={styles.sectionSubtitle}>Vincula las marcas oficiales que este distribuidor representa.</span>
-                </div>
-                <span className={styles.sectionNote}>
-                  {formData.marcas.length} vinculadas
-                </span>
-              </div>
-
-              <div className={styles.brandsWrapper}>
-                <div className={styles.brandChips}>
-                  {displayMarcas.map(brand => {
-                    const isSelected = formData.marcas.includes(brand);
-                    return (
-                      <button
-                        type="button"
-                        key={brand} 
-                        className={`${styles.brandChip} ${isSelected ? styles.brandChipSelected : ''}`}
-                        onClick={() => handleMarcaToggle(brand)}
-                      >
-                        <span>{brand}</span>
-                        {isSelected && <Check size={14} />}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className={styles.brandAddRow}>
-                  <input 
-                    type="text" 
-                    className={styles.brandInput} 
-                    placeholder="Nombre de otra marca (ej: Stabilo, Giotto)..." 
-                    value={newBrandInput}
-                    onChange={(e) => setNewBrandInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCustomBrand())}
-                  />
-                  <button 
-                    type="button" 
-                    className={styles.brandAddBtn} 
-                    onClick={handleAddCustomBrand}
-                    disabled={addingBrand}
-                  >
-                    <Plus size={14} />
-                    {addingBrand ? 'Guardando...' : 'Añadir Marca'}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Form Actions Footer */}
-            <div className={styles.formActions}>
-              <div className={styles.formActionsLeft}>
-                <button type="button" className={styles.btnGhost} onClick={handleReset}>
-                  <RotateCcw size={15} /> Limpiar formulario
-                </button>
-              </div>
-
-              <button 
-                type="submit" 
-                className={styles.btnSave} 
-                disabled={loading}
-              >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {loading ? 'Procesando...' : formData.id_proveedor ? 'Actualizar Proveedor' : 'Registrar Proveedor'}
-              </button>
-            </div>
-          </form>
-
-          {/* Right Sidebar: Live ID Card & Quick Search */}
-          <aside className={styles.rightSidebar}>
-            
-            {/* Live Supplier Credential Card */}
-            <div className={styles.previewCard}>
-              <div className={styles.previewHeader}>
-                <h3 className={styles.previewTitle}>
-                  <IdCard size={16} /> Ficha Comercial
-                </h3>
-                <span className={styles.previewLiveBadge}>
-                  <span className={styles.previewLiveDot} /> En tiempo real
-                </span>
-              </div>
-
-              <div className={styles.credentialSurface}>
-                <div className={styles.credentialHeader}>
-                  <div className={styles.companyMonogram}>
-                    {formData.razon_social ? formData.razon_social.substring(0, 2).toUpperCase() : 'LT'}
-                  </div>
-                  <div className={styles.companyDetails}>
-                    <span className={styles.companyName}>
-                      {formData.razon_social || 'Razón Social de Ejemplo'}
-                    </span>
-                    <span className={styles.companyNit}>
-                      NIT: {formData.nit || '0000000000'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className={styles.credentialContactList}>
-                  <div className={styles.credentialContactRow}>
-                    <Contact size={14} />
-                    <span>{formData.nombre_contacto || 'Sin contacto designado'}</span>
-                  </div>
-                  <div className={styles.credentialContactRow}>
-                    <Phone size={14} />
-                    <span>{formData.telefono_contacto || 'Sin teléfono registrado'}</span>
-                  </div>
-                  <div className={styles.credentialContactRow}>
-                    <MapPin size={14} />
-                    <span>{formData.ciudad || 'Sede no especificada'}</span>
-                  </div>
-                </div>
-
-                {formData.marcas.length > 0 && (
-                  <div className={styles.credentialTagGroup}>
-                    <span className={styles.credentialTagLabel}>Marcas Vinculadas ({formData.marcas.length}):</span>
-                    <div className={styles.credentialTagChips}>
-                      {formData.marcas.slice(0, 5).map(m => (
-                        <span key={m} className={styles.credentialPill}>{m}</span>
-                      ))}
-                      {formData.marcas.length > 5 && (
-                        <span className={styles.credentialPill}>+{formData.marcas.length - 5} más</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {formData.lineas_productos.length > 0 && (
-                  <div className={styles.credentialTagGroup}>
-                    <span className={styles.credentialTagLabel}>Líneas Escolares:</span>
-                    <div className={styles.credentialTagChips}>
-                      {formData.lineas_productos.slice(0, 3).map(l => (
-                        <span key={l} className={styles.credentialPill}>{l}</span>
-                      ))}
-                      {formData.lineas_productos.length > 3 && (
-                        <span className={styles.credentialPill}>+{formData.lineas_productos.length - 3}</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className={styles.credentialFooter}>
-                  <span className={styles.kpiSubtext}>Disponibilidad operativa:</span>
-                  <span className={`${styles.statusBadge} ${formData.estado ? styles.statusBadgeActive : styles.statusBadgeInactive}`}>
-                    <span className={styles.statusDot} />
-                    {formData.estado ? 'Habilitado' : 'Suspendido'}
-                  </span>
-                </div>
-              </div>
-
-              <div className={styles.infoAlert}>
-                <Info size={18} className={styles.infoIcon} />
-                <span>
-                  Al dar de alta este proveedor, sus marcas y productos estarán disponibles en los módulos de <strong>Pedidos a Proveedor</strong> y recepción de mercadería.
-                </span>
-              </div>
-            </div>
-
-            {/* Quick Recent Suppliers List */}
-            <div className={styles.quickListCard}>
-              <div className={styles.quickListHeader}>
-                <h3 className={styles.quickListTitle}>
-                  <Clock size={16} /> Últimos Registrados
-                </h3>
-                <button 
-                  type="button" 
-                  className={styles.quickListAction} 
-                  onClick={() => setActiveView('directory')}
-                >
-                  Ver todos ({totalProveedores})
-                </button>
-              </div>
-
-              <div className={styles.quickSearchInput}>
-                <Search size={14} color="var(--color-text-placeholder)" />
-                <input 
-                  type="text" 
-                  placeholder="Filtrar por nombre o NIT..." 
-                  value={quickSearch}
-                  onChange={(e) => setQuickSearch(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.quickItems}>
-                {filteredQuickList.length > 0 ? (
-                  filteredQuickList.map((item, idx) => (
-                    <div 
-                      key={item.id_proveedor || idx} 
-                      className={styles.quickItem}
-                      onClick={() => handleSelectSupplierForPreview(item)}
-                      title="Click para ver ficha completa"
-                    >
-                      <div className={styles.quickInitials}>
-                        {item.razon_social ? item.razon_social.substring(0, 2).toUpperCase() : 'PR'}
-                      </div>
-                      <div className={styles.quickDetails}>
-                        <span className={styles.quickName}>{item.razon_social}</span>
-                        <span className={styles.quickMeta}>NIT: {item.nit} {item.ciudad ? `• ${item.ciudad}` : ''}</span>
-                      </div>
-                      <span className={`${styles.statusBadge} ${item.estado ? styles.statusBadgeActive : styles.statusBadgeInactive}`} style={{ fontSize: '11px', padding: '2px 6px' }}>
-                        {item.estado ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ padding: '16px', textAlign: 'center', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                    No se encontraron proveedores.
-                  </div>
-                )}
-              </div>
-            </div>
-          </aside>
-        </div>
-      ) : (
-        /* Full Directory View */
-        <section className={styles.directorySection} aria-label="Directorio Completo de Proveedores">
-          <div className={styles.directoryControls}>
-            <div className={styles.directorySearch}>
-              <Search size={16} color="var(--color-text-placeholder)" />
-              <input 
-                type="text" 
-                placeholder="Buscar proveedor por razón social, NIT, contacto o ciudad..."
-                value={directorySearch}
-                onChange={(e) => setDirectorySearch(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.directoryFilters}>
-              <Filter size={15} color="var(--color-text-secondary)" />
-              <button 
-                type="button"
-                className={`${styles.filterChip} ${statusFilter === 'all' ? styles.filterChipActive : ''}`}
-                onClick={() => setStatusFilter('all')}
-              >
-                Todos ({totalProveedores})
-              </button>
-              <button 
-                type="button"
-                className={`${styles.filterChip} ${statusFilter === 'active' ? styles.filterChipActive : ''}`}
-                onClick={() => setStatusFilter('active')}
-              >
-                Activos ({activosCount})
-              </button>
-              <button 
-                type="button"
-                className={`${styles.filterChip} ${statusFilter === 'inactive' ? styles.filterChipActive : ''}`}
-                onClick={() => setStatusFilter('inactive')}
-              >
-                Inactivos ({totalProveedores - activosCount})
-              </button>
-            </div>
-          </div>
-
-          <div className={styles.directoryGrid}>
-            {filteredDirectory.length > 0 ? (
-              directoryVisibles.map((prov, idx) => (
-                <div key={prov.id_proveedor || idx} className={styles.supplierCard}>
-                  <div className={styles.supplierCardHeader}>
-                    <div className={styles.supplierCardTitleGroup}>
-                      <div className={styles.supplierCardMonogram}>
-                        {prov.razon_social ? prov.razon_social.substring(0, 2).toUpperCase() : 'PR'}
-                      </div>
-                      <div>
-                        <h3 className={styles.supplierCardTitle}>{prov.razon_social}</h3>
-                        <span className={styles.supplierCardNit}>NIT: {prov.nit}</span>
-                      </div>
-                    </div>
-                    <span className={`${styles.statusBadge} ${prov.estado ? styles.statusBadgeActive : styles.statusBadgeInactive}`}>
-                      <span className={styles.statusDot} />
-                      {prov.estado ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </div>
-
-                  <div className={styles.supplierCardBody}>
-                    <div className={styles.supplierMetaRow}>
-                      <Contact size={14} />
-                      <span>{prov.nombre_contacto || 'Sin contacto registrado'}</span>
-                    </div>
-                    <div className={styles.supplierMetaRow}>
-                      <Phone size={14} />
-                      <span>{prov.telefono_contacto || 'Sin teléfono registrado'}</span>
-                    </div>
-                    <div className={styles.supplierMetaRow}>
-                      <MapPin size={14} />
-                      <span>{prov.ciudad || 'Sede sin especificar'}</span>
-                    </div>
-                  </div>
-
-                  {prov.marcas && prov.marcas.length > 0 && (
-                    <div className={styles.supplierCardBrands}>
-                      <span className={styles.supplierBrandsTitle}>Marcas que abastece:</span>
-                      <div className={styles.supplierBrandsList}>
-                        {prov.marcas.slice(0, 4).map(m => (
-                          <span key={m} className={styles.supplierBrandBadge}>{m}</span>
-                        ))}
-                        {prov.marcas.length > 4 && (
-                          <span className={styles.supplierBrandBadge}>+{prov.marcas.length - 4}</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
-                    <button 
-                      type="button" 
-                      className={styles.btnGhost}
-                      style={{ width: '100%', justifyContent: 'center' }}
-                      onClick={() => handleSelectSupplierForPreview(prov)}
-                    >
-                      <Sparkles size={14} /> Ver en Ficha / Editar
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div style={{ gridColumn: '1 / -1', padding: '48px', textAlign: 'center', background: 'white', borderRadius: 'var(--radius-md)' }}>
-                <Building2 size={36} color="var(--color-text-placeholder)" style={{ margin: '0 auto 12px' }} />
-                <h4 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-heading)' }}>No se encontraron proveedores</h4>
-                <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                  Intenta cambiar el criterio de búsqueda o el filtro de estado.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div
-            style={{
-              borderRadius: 'var(--radius-md)',
-              overflow: 'hidden',
-              border: '1px solid var(--color-border-subtle)',
-              boxShadow: 'var(--shadow-card)',
-            }}
-          >
-            <Paginador
-              total={filteredDirectory.length}
-              pagina={paginaActualDirectorio}
-              onChange={setPaginaDirectorio}
-              porPagina={porPaginaDirectorio}
-              opcionesPorPagina={[6, 12, 24]}
-              onPorPaginaChange={(nuevo) => {
-                setPorPaginaDirectorio(nuevo);
-                setPaginaDirectorio(1);
-              }}
-              etiqueta="proveedores"
+      {/* Tarjeta con Barra de Filtros y Tabla */}
+      <div className={styles.card}>
+        <div className={styles.toolbar}>
+          <div className={styles.searchBox}>
+            <Search size={16} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por razón social, NIT/CI, contacto, ciudad..."
             />
           </div>
-        </section>
+
+          <div className={styles.filters}>
+            <button
+              type="button"
+              className={`${styles.filterChip} ${filtro === 'all' ? styles.filterChipActive : ''}`}
+              onClick={() => setFiltro('all')}
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              className={`${styles.filterChip} ${filtro === 'active' ? styles.filterChipActive : ''}`}
+              onClick={() => setFiltro('active')}
+            >
+              Activos
+            </button>
+            <button
+              type="button"
+              className={`${styles.filterChip} ${filtro === 'inactive' ? styles.filterChipActive : ''}`}
+              onClick={() => setFiltro('inactive')}
+            >
+              Inactivos
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div
+            style={{
+              padding: '48px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            <Loader2 size={18} className={styles.spinner} /> Cargando proveedores...
+          </div>
+        ) : filtrados.length === 0 ? (
+          <div className={styles.empty}>
+            <Building2 size={36} color="var(--color-text-placeholder)" />
+            <span className={styles.emptyTitle}>Sin proveedores</span>
+            <span className={styles.emptyText}>Registra tu primer proveedor o ajusta los filtros de búsqueda.</span>
+          </div>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Proveedor / Razón Social</th>
+                  <th>NIT / CI</th>
+                  <th>Contacto & Teléfono</th>
+                  <th>Ciudad</th>
+                  <th>Marcas & Líneas</th>
+                  <th className={styles.center}>Estado</th>
+                  <th className={styles.right}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibles.map((p) => {
+                  const marcasListado = p.marcas || [];
+                  const lineasListado = p.lineas_productos || [];
+
+                  return (
+                    <tr key={p.id_proveedor}>
+                      <td>
+                        <div className={styles.strong}>{p.razon_social}</div>
+                        {p.nombre_contacto && (
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                            {p.nombre_contacto}
+                          </div>
+                        )}
+                      </td>
+                      <td className={styles.muted} style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        {p.nit || '—'}
+                      </td>
+                      <td>
+                        {p.telefono_contacto ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <Phone size={13} color="var(--color-primary)" />
+                            {p.telefono_contacto}
+                          </span>
+                        ) : (
+                          <span className={styles.muted}>—</span>
+                        )}
+                      </td>
+                      <td>
+                        {p.ciudad ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <MapPin size={13} color="var(--color-text-muted)" />
+                            {p.ciudad}
+                          </span>
+                        ) : (
+                          <span className={styles.muted}>—</span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '300px' }}>
+                          {marcasListado.slice(0, 3).map((m) => (
+                            <span
+                              key={m}
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: '#F0E7FE',
+                                color: '#7C3AED',
+                              }}
+                            >
+                              {m}
+                            </span>
+                          ))}
+                          {lineasListado.slice(0, 2).map((l) => (
+                            <span
+                              key={l}
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 500,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: '#E0EDFF',
+                                color: '#2563EB',
+                              }}
+                            >
+                              {l}
+                            </span>
+                          ))}
+                          {marcasListado.length + lineasListado.length > 5 && (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                color: 'var(--color-text-muted)',
+                                padding: '2px 4px',
+                              }}
+                            >
+                              +{marcasListado.length + lineasListado.length - 5}
+                            </span>
+                          )}
+                          {marcasListado.length === 0 && lineasListado.length === 0 && (
+                            <span className={styles.muted}>Sin vincular</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={styles.center}>
+                        <span className={`${styles.pill} ${p.estado ? styles.pillSuccess : styles.pillNeutral}`}>
+                          <span className={styles.pillDot} />
+                          {p.estado ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className={styles.rowActions}>
+                          <button
+                            type="button"
+                            className={styles.iconBtn}
+                            title="Ver ficha completa"
+                            onClick={() => abrirDetalle(p)}
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.iconBtn}
+                            title="Editar proveedor"
+                            onClick={() => abrirEditar(p)}
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.iconBtn} ${p.estado ? styles.iconBtnDanger : styles.iconBtnSuccess}`}
+                            title={p.estado ? 'Desactivar proveedor' : 'Reactivar proveedor'}
+                            onClick={() => alternarEstado(p)}
+                          >
+                            {p.estado ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <Paginador
+          pagina={paginaActual}
+          total={filtrados.length}
+          porPagina={porPagina}
+          onChange={setPagina}
+          onPorPaginaChange={(n) => {
+            setPorPagina(n);
+            setPagina(1);
+          }}
+          etiqueta="proveedores"
+        />
+      </div>
+
+      {/* Modal Crear / Editar Proveedor */}
+      <Modal
+        open={modalOpen}
+        title={form.id_proveedor ? 'Editar Proveedor' : 'Nuevo Proveedor'}
+        onClose={() => setModalOpen(false)}
+        width={940}
+        footer={
+          <>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnGhost}`}
+              onClick={() => setModalOpen(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="form-proveedor"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              disabled={saving || hayErrores}
+            >
+              {saving ? <Loader2 size={16} className={styles.spinner} /> : <Save size={16} />}
+              {saving
+                ? 'Guardando...'
+                : form.id_proveedor
+                ? 'Actualizar Proveedor'
+                : 'Guardar Proveedor'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="form-proveedor"
+          onSubmit={guardar}
+          noValidate
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(340px, 1.1fr) minmax(340px, 1fr)',
+            gap: '24px',
+            alignItems: 'start',
+          }}
+        >
+          {/* Columna Izquierda: Datos Formales y Contacto */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="prov-razon">
+                Razón Social / Nombre Comercial <span className={styles.requiredMark}>*</span>
+              </label>
+              <input
+                id="prov-razon"
+                className={`${styles.input} ${errores.razon_social ? styles.inputError : ''}`}
+                type="text"
+                value={form.razon_social}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, razon_social: e.target.value }));
+                  if (errores.razon_social) {
+                    setErrores((prev) => ({ ...prev, razon_social: undefined }));
+                  }
+                }}
+                placeholder="Ej: Distribuidora Escolar Papelera S.A."
+              />
+              {errores.razon_social && (
+                <span className={styles.fieldError} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <AlertCircle size={13} /> {errores.razon_social}
+                </span>
+              )}
+            </div>
+
+            {/* Campo NIT / CI con VALIDACIÓN EN TIEMPO REAL */}
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="prov-nit">
+                NIT / CI <span className={styles.requiredMark}>*</span>
+              </label>
+              <input
+                id="prov-nit"
+                className={`${styles.input} ${errores.nit ? styles.inputError : ''}`}
+                type="text"
+                value={form.nit}
+                onChange={(e) => actualizarNit(e.target.value)}
+                placeholder="Ej: 1020304050 o 1020304-1B"
+              />
+              {errores.nit ? (
+                <span className={styles.fieldError} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                  <AlertCircle size={13} /> {errores.nit}
+                </span>
+              ) : form.nit.trim() ? (
+                <span style={{ fontSize: '12px', color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontWeight: 500 }}>
+                  <CheckCircle2 size={13} /> NIT/CI disponible y válido
+                </span>
+              ) : null}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="prov-contacto">
+                  Nombre del Contacto
+                </label>
+                <input
+                  id="prov-contacto"
+                  className={styles.input}
+                  type="text"
+                  value={form.nombre_contacto}
+                  onChange={(e) => setForm((prev) => ({ ...prev, nombre_contacto: e.target.value }))}
+                  placeholder="Ej: Carlos Valenzuela"
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="prov-tel">
+                  Teléfono / WhatsApp
+                </label>
+                <input
+                  id="prov-tel"
+                  className={`${styles.input} ${errores.telefono_contacto ? styles.inputError : ''}`}
+                  type="text"
+                  value={form.telefono_contacto}
+                  onChange={(e) => actualizarTelefono(e.target.value)}
+                  placeholder="Ej: 71234567"
+                />
+                {errores.telefono_contacto && (
+                  <span className={styles.fieldError} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle size={13} /> {errores.telefono_contacto}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="prov-ciudad">
+                  Ciudad de Despacho
+                </label>
+                <input
+                  id="prov-ciudad"
+                  list="lista-ciudades-prov"
+                  className={styles.input}
+                  type="text"
+                  value={form.ciudad}
+                  onChange={(e) => setForm((prev) => ({ ...prev, ciudad: e.target.value }))}
+                  placeholder="Ej: La Paz"
+                />
+                <datalist id="lista-ciudades-prov">
+                  {CIUDADES_SUGERIDAS.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="prov-estado">
+                  Estado Operativo
+                </label>
+                <select
+                  id="prov-estado"
+                  className={styles.select}
+                  value={form.estado ? 'true' : 'false'}
+                  onChange={(e) => setForm((prev) => ({ ...prev, estado: e.target.value === 'true' }))}
+                >
+                  <option value="true">Activo (Habilitado)</option>
+                  <option value="false">Inactivo</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Columna Derecha: Marcas y Líneas Abastecidas */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              borderLeft: '1px solid var(--color-border-light)',
+              paddingLeft: '20px',
+            }}
+          >
+            {/* Sección Marcas */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label className={styles.fieldLabel} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Award size={14} color="#7C3AED" /> Marcas que Abastece
+                </label>
+                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                  {form.marcas.length} seleccionadas
+                </span>
+              </div>
+
+              {/* Chips de marcas seleccionadas */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  minHeight: '36px',
+                  padding: '6px',
+                  background: 'var(--color-bg-subtle)',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border-subtle)',
+                }}
+              >
+                {form.marcas.length === 0 ? (
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontStyle: 'italic', padding: '4px' }}>
+                    Ninguna marca seleccionada.
+                  </span>
+                ) : (
+                  form.marcas.map((m) => (
+                    <span
+                      key={m}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        background: '#F0E7FE',
+                        color: '#7C3AED',
+                        border: '1px solid rgba(124, 58, 237, 0.2)',
+                      }}
+                    >
+                      {m}
+                      <button
+                        type="button"
+                        onClick={() => quitarMarcaDeForm(m)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: '#7C3AED',
+                        }}
+                        title="Quitar marca"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+
+              {/* Selector de marcas existentes */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <select
+                  className={styles.select}
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) agregarMarcaAForm(e.target.value);
+                  }}
+                  style={{ fontSize: '12px', padding: '6px 10px' }}
+                >
+                  <option value="">+ Vincular marca existente...</option>
+                  {marcasDisponibles.map((m) => (
+                    <option key={m.nombre_marca} value={m.nombre_marca}>
+                      {m.nombre_marca}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Input para crear nueva marca al vuelo */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ fontSize: '12px', padding: '6px 10px' }}
+                  value={nuevaMarcaInput}
+                  onChange={(e) => setNuevaMarcaInput(e.target.value)}
+                  placeholder="Crear nueva marca..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      crearYNuevaMarca();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnGhost}`}
+                  style={{ fontSize: '11px', padding: '6px 10px', flexShrink: 0 }}
+                  onClick={crearYNuevaMarca}
+                  disabled={guardandoMarca || !nuevaMarcaInput.trim()}
+                >
+                  {guardandoMarca ? <Loader2 size={12} className={styles.spinner} /> : <Plus size={12} />}
+                  Agregar
+                </button>
+              </div>
+            </div>
+
+            {/* Separador sutil */}
+            <hr style={{ border: 'none', borderTop: '1px dashed var(--color-border-light)', margin: '4px 0' }} />
+
+            {/* Sección Líneas de Producto */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label className={styles.fieldLabel} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Shapes size={14} color="#2563EB" /> Líneas de Producto
+                </label>
+                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                  {form.lineas_productos.length} seleccionadas
+                </span>
+              </div>
+
+              {/* Chips de líneas seleccionadas */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  minHeight: '36px',
+                  padding: '6px',
+                  background: 'var(--color-bg-subtle)',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border-subtle)',
+                }}
+              >
+                {form.lineas_productos.length === 0 ? (
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontStyle: 'italic', padding: '4px' }}>
+                    Ninguna línea seleccionada.
+                  </span>
+                ) : (
+                  form.lineas_productos.map((l) => (
+                    <span
+                      key={l}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        background: '#E0EDFF',
+                        color: '#2563EB',
+                        border: '1px solid rgba(37, 99, 235, 0.2)',
+                      }}
+                    >
+                      {l}
+                      <button
+                        type="button"
+                        onClick={() => quitarLineaDeForm(l)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: '#2563EB',
+                        }}
+                        title="Quitar línea"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+
+              {/* Selector de líneas existentes */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <select
+                  className={styles.select}
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) agregarLineaAForm(e.target.value);
+                  }}
+                  style={{ fontSize: '12px', padding: '6px 10px' }}
+                >
+                  <option value="">+ Vincular línea existente...</option>
+                  {lineasDisponibles.map((l) => (
+                    <option key={l.nombre_linea} value={l.nombre_linea}>
+                      {l.nombre_linea}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Input para crear nueva línea al vuelo */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ fontSize: '12px', padding: '6px 10px' }}
+                  value={nuevaLineaInput}
+                  onChange={(e) => setNuevaLineaInput(e.target.value)}
+                  placeholder="Crear nueva línea..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      crearYNuevaLinea();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnGhost}`}
+                  style={{ fontSize: '11px', padding: '6px 10px', flexShrink: 0 }}
+                  onClick={crearYNuevaLinea}
+                  disabled={guardandoLinea || !nuevaLineaInput.trim()}
+                >
+                  {guardandoLinea ? <Loader2 size={12} className={styles.spinner} /> : <Plus size={12} />}
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Ficha Completa del Proveedor */}
+      {proveedorDetalle && (
+        <Modal
+          open={modalDetalleOpen}
+          title={`Ficha de Proveedor: ${proveedorDetalle.razon_social}`}
+          onClose={() => setModalDetalleOpen(false)}
+          width={640}
+          footer={
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={() => setModalDetalleOpen(false)}
+            >
+              Cerrar Ficha
+            </button>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              <div>
+                <span className={styles.hint}>Razón Social</span>
+                <div className={styles.strong}>{proveedorDetalle.razon_social}</div>
+              </div>
+              <div>
+                <span className={styles.hint}>NIT / CI</span>
+                <div style={{ fontFamily: 'monospace', fontWeight: 600 }}>{proveedorDetalle.nit || '—'}</div>
+              </div>
+              <div>
+                <span className={styles.hint}>Contacto</span>
+                <div>{proveedorDetalle.nombre_contacto || '—'}</div>
+              </div>
+              <div>
+                <span className={styles.hint}>Teléfono / WhatsApp</span>
+                <div>{proveedorDetalle.telefono_contacto || '—'}</div>
+              </div>
+              <div>
+                <span className={styles.hint}>Ciudad</span>
+                <div>{proveedorDetalle.ciudad || '—'}</div>
+              </div>
+              <div>
+                <span className={styles.hint}>Estado Operativo</span>
+                <div>
+                  <span className={`${styles.pill} ${proveedorDetalle.estado ? styles.pillSuccess : styles.pillNeutral}`}>
+                    <span className={styles.pillDot} />
+                    {proveedorDetalle.estado ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border-light)' }} />
+
+            <div>
+              <span className={styles.hint} style={{ display: 'block', marginBottom: '6px' }}>
+                Marcas que Distribuye ({(proveedorDetalle.marcas || []).length})
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {(proveedorDetalle.marcas || []).length === 0 ? (
+                  <span className={styles.muted}>Sin marcas vinculadas</span>
+                ) : (
+                  (proveedorDetalle.marcas || []).map((m) => (
+                    <span
+                      key={m}
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        background: '#F0E7FE',
+                        color: '#7C3AED',
+                      }}
+                    >
+                      {m}
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div>
+              <span className={styles.hint} style={{ display: 'block', marginBottom: '6px' }}>
+                Líneas de Producto que Abastece ({(proveedorDetalle.lineas_productos || []).length})
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {(proveedorDetalle.lineas_productos || []).length === 0 ? (
+                  <span className={styles.muted}>Sin líneas vinculadas</span>
+                ) : (
+                  (proveedorDetalle.lineas_productos || []).map((l) => (
+                    <span
+                      key={l}
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        background: '#E0EDFF',
+                        color: '#2563EB',
+                      }}
+                    >
+                      {l}
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </Modal>
       )}
     </main>
   );

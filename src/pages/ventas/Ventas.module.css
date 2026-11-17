@@ -1,0 +1,756 @@
+/* ==========================================================================
+   Ventas Mostrador — Estilos Responsivos y Componentes Específicos
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Encabezado y Acciones Principales
+   -------------------------------------------------------------------------- */
+.headerActionsResponsive {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .headerActionsResponsive {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .headerBtn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tarjetas KPI
+   -------------------------------------------------------------------------- */
+.kpiGridResponsive {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 960px) {
+  .kpiGridResponsive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .kpiGridResponsive {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Barra de Herramientas (Búsqueda + Filtros)
+   -------------------------------------------------------------------------- */
+.toolbarResponsive {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.searchBoxResponsive {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  flex: 1;
+  min-width: 220px;
+  max-width: 380px;
+}
+
+.searchBoxResponsive input {
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--color-text-heading);
+  width: 100%;
+}
+
+.searchBoxResponsive input::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+.selectVendedorResponsive {
+  max-width: 230px;
+  height: 36px;
+}
+
+.filtersResponsive {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .toolbarResponsive {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .searchBoxResponsive {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .selectVendedorResponsive {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .filtersResponsive {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
+  .filtersResponsive::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Visualización Adaptativa: Selector Tarjetas / Tabla y Grilla de Tarjetas
+   -------------------------------------------------------------------------- */
+.viewSwitcher {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.viewSwitchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.viewSwitchBtn:hover {
+  color: var(--color-text-heading);
+}
+
+.viewSwitchBtnActive {
+  background: var(--color-white);
+  color: var(--color-text-heading);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 768px) {
+  .viewSwitcher {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .viewSwitchBtn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+.desktopTableWrap {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.salesCardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 18px 22px;
+}
+
+@media (max-width: 768px) {
+  .salesCardsGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+}
+
+.saleCard {
+  background: var(--color-white);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow var(--transition-fast);
+}
+
+.saleCard:hover {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.saleCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding-bottom: 8px;
+}
+
+.saleCardIdGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.saleCardId {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--color-primary);
+}
+
+.saleCardDate {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.saleCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.saleCardRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.saleCardRowLabel {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.saleCardRowValue {
+  text-align: right;
+  color: var(--color-text-heading);
+  font-weight: 500;
+}
+
+.saleCardTotalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--color-border-subtle);
+}
+
+.saleCardTotalLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-body);
+}
+
+.saleCardTotalValue {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.saleCardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.saleCardActionMain {
+  flex: 1;
+  justify-content: center;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.saleCardActionIcon {
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --------------------------------------------------------------------------
+   Canasta de Productos (POS Basket)
+   -------------------------------------------------------------------------- */
+.canastaHeaderWrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.canastaSearchGroup {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.canastaSearchInput {
+  width: 240px;
+  padding: 6px 10px;
+}
+
+.canastaActionBtns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .canastaHeaderWrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .canastaSearchGroup {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .canastaSearchInput {
+    width: 100%;
+  }
+
+  .canastaActionBtns {
+    width: 100%;
+  }
+
+  .canastaActionBtns button {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* Grilla de cabecera y filas en escritorio */
+.canastaHeader {
+  display: grid;
+  grid-template-columns: 2fr 0.65fr 1.25fr 0.9fr 0.9fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+.canastaItem {
+  display: grid;
+  grid-template-columns: 2fr 0.65fr 1.25fr 0.9fr 0.9fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.canastaMobileTag {
+  display: none;
+}
+
+.subtotalValue {
+  color: var(--color-text-heading);
+}
+
+/* Disposición móvil para cada producto en la canasta */
+@media (max-width: 768px) {
+  .canastaHeader {
+    display: none;
+  }
+
+  .canastaItem {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    grid-template-areas:
+      "prod prod del"
+      "cant unid unid"
+      "prec subt subt";
+    gap: 10px 8px;
+    padding: 12px;
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-sm);
+    margin-bottom: 10px;
+    align-items: end;
+  }
+
+  .canastaMobileTag {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+
+  .canastaColProducto {
+    grid-area: prod;
+  }
+
+  .canastaColAccion {
+    grid-area: del;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .canastaBtnQuitar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .canastaColCantidad {
+    grid-area: cant;
+  }
+
+  .canastaColUnidad {
+    grid-area: unid;
+  }
+
+  .canastaColPrecio {
+    grid-area: prec;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .canastaColSubtotal {
+    grid-area: subt;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .subtotalValue {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Totales y Desglose
+   -------------------------------------------------------------------------- */
+.canastaTotalBox {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.canastaTotalBreakdown {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.canastaTotalFinal {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+@media (max-width: 600px) {
+  .canastaTotalBox {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    background: var(--color-bg-subtle);
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    margin-top: 10px;
+  }
+
+  .canastaTotalBreakdown {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+
+  .canastaTotalFinal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 6px;
+    border-top: 1px dashed var(--color-border-light);
+    font-size: 16px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Panel de Cálculo de Totales y Cobro (Subtotal -> Descuento -> Total -> Monto Entregado -> Vuelto)
+   -------------------------------------------------------------------------- */
+.cobroPanel {
+  margin-top: 16px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cobroCalculoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cobroDatoGrupo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cobroDatoLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.cobroDatoValor {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.cobroDescuentoInput {
+  max-width: 110px;
+  height: 34px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.cobroTotalDestacado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-white);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-light);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.cobroTotalLabel {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.cobroTotalValor {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.cobroDivider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  border: none;
+  margin: 0;
+}
+
+.cobroEfectivoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--color-white);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+}
+
+.cobroEfectivoInputWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cobroEfectivoInput {
+  max-width: 140px;
+  height: 36px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.cobroBtnExacto {
+  font-size: 11px;
+  padding: 5px 9px;
+  height: 32px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.cobroBtnExacto:hover {
+  background: var(--color-border-light);
+}
+
+.cobroVueltoWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cobroVueltoBadgePositivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.cobroVueltoBadgeAlerta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .cobroCalculoRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .cobroDatoGrupo {
+    justify-content: space-between;
+  }
+
+  .cobroTotalDestacado {
+    justify-content: space-between;
+  }
+
+  .cobroEfectivoRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .cobroEfectivoInputWrap {
+    justify-content: space-between;
+  }
+
+  .cobroEfectivoInput {
+    max-width: 100%;
+    flex: 1;
+  }
+
+  .cobroVueltoWrap {
+    justify-content: space-between;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Modal de Detalle / Comprobante
+   -------------------------------------------------------------------------- */
+.detailGridResponsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 480px) {
+  .detailGridResponsive {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+}
+
+.printBtnResponsive {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .printBtnResponsive {
+    width: 100%;
+    justify-content: center;
+  }
+}

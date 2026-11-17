@@ -11,6 +11,8 @@ export interface DetallePedidoProveedor {
   cantidad_recibida?: number;
   cantidad_pendiente?: number;
   unidad_venta: string;
+  id_unidad_producto?: number | null;
+  factor_conversion?: number;
   precio_unitario_compra: number;
   porcentaje_descuento?: number;
   subtotal: number;
@@ -35,6 +37,8 @@ export interface DetallePedidoPayload {
   id_producto: number;
   cantidad_solicitada: number;
   unidad_venta: string;
+  id_unidad_producto?: number;
+  factor_conversion?: number;
   precio_unitario_compra: number;
   porcentaje_descuento?: number;
 }

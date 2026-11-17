@@ -599,9 +599,9 @@
   padding-bottom: 6px;
 }
 
-/* Grilla extendida para pedidos (producto, cantidad, unidad, precio, desc, subtotal) */
+/* Grilla extendida para pedidos (producto, cantidad, unidad, u. por medida, precio, desc, subtotal) */
 .lineRowPedido {
-  grid-template-columns: 1.7fr 0.7fr 0.9fr 0.9fr 0.6fr 0.9fr auto;
+  grid-template-columns: 1.55fr 0.55fr 0.9fr 0.65fr 0.75fr 0.55fr 0.8fr auto;
 }
 
 .lineRowLast {

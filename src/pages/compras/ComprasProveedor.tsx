@@ -26,7 +26,7 @@ import {
   CompraPayload,
 } from '../../services/compras-proveedores.service';
 import { productosService, Producto } from '../../services/productos.service';
-import { proveedoresService, Proveedor } from '../../services/proveedores.service';
+import { proveedoresService, Proveedor, Marca, LineaProducto } from '../../services/proveedores.service';
 import { usuariosService, Usuario } from '../../services/usuarios.service';
 import { pedidosService, PedidoProveedor } from '../../services/pedidos-proveedor.service';
 import { SelectorComprobante } from '../../components/SelectorComprobante/SelectorComprobante';
@@ -68,6 +68,8 @@ export const ComprasProveedor: React.FC = () => {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [marcas, setMarcas] = useState<Marca[]>([]);
+  const [lineas, setLineas] = useState<LineaProducto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -79,22 +81,29 @@ export const ComprasProveedor: React.FC = () => {
 
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<FiltroEstado>('all');
+  const [filtroMarca, setFiltroMarca] = useState('');
+  const [filtroLinea, setFiltroLinea] = useState('');
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(POR_PAGINA_INICIAL);
 
   const cargar = async () => {
     setLoading(true);
     try {
-      const [comprasData, productosData, proveedoresData, usuariosData] = await Promise.all([
-        comprasService.getAll(),
-        productosService.getAll(false),
-        proveedoresService.getProveedores(),
-        usuariosService.getAll(),
-      ]);
+      const [comprasData, productosData, proveedoresData, usuariosData, marcasData, lineasData] =
+        await Promise.all([
+          comprasService.getAll(),
+          productosService.getAll(false),
+          proveedoresService.getProveedores(),
+          usuariosService.getAll(),
+          proveedoresService.getMarcas(),
+          proveedoresService.getLineasProducto(),
+        ]);
       setCompras(comprasData || []);
       setProductos(productosData || []);
       setProveedores(proveedoresData || []);
       setUsuarios(usuariosData || []);
+      setMarcas(marcasData || []);
+      setLineas(lineasData || []);
     } catch (error) {
       console.error(error);
       showToast('No se pudieron cargar las compras.', 'error');
@@ -110,7 +119,7 @@ export const ComprasProveedor: React.FC = () => {
 
   useEffect(() => {
     setPagina(1);
-  }, [search, filtro]);
+  }, [search, filtro, filtroMarca, filtroLinea]);
 
   const totalEstimado = useMemo(
     () =>
@@ -371,16 +380,49 @@ export const ComprasProveedor: React.FC = () => {
 
   const filtradas = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const fMarca = filtroMarca.trim().toLowerCase();
+    const fLinea = filtroLinea.trim().toLowerCase();
+
     return compras.filter((c) => {
-      const coincide =
-        !q ||
-        (c.razon_social_proveedor ?? '').toLowerCase().includes(q) ||
-        (c.nombre_usuario ?? '').toLowerCase().includes(q) ||
-        String(c.id_compra ?? '').includes(q);
       const porEstado = filtro === 'all' ? true : c.estado === filtro;
-      return coincide && porEstado;
+      if (!porEstado) return false;
+
+      // Filtro por marca de productos en la compra
+      if (fMarca) {
+        const tieneMarca = (c.detalles || []).some(
+          (d) => (d.nombre_marca ?? '').toLowerCase() === fMarca
+        );
+        if (!tieneMarca) return false;
+      }
+
+      // Filtro por línea de productos en la compra
+      if (fLinea) {
+        const tieneLinea = (c.detalles || []).some(
+          (d) => (d.nombre_linea ?? '').toLowerCase() === fLinea
+        );
+        if (!tieneLinea) return false;
+      }
+
+      // Búsqueda por proveedor (razón social, NIT, usuario, ID) o por producto (nombre, código)
+      if (q) {
+        const coincideProveedor =
+          (c.razon_social_proveedor ?? '').toLowerCase().includes(q) ||
+          (c.nit_proveedor ?? '').toLowerCase().includes(q) ||
+          (c.nombre_usuario ?? '').toLowerCase().includes(q) ||
+          String(c.id_compra ?? '').includes(q);
+
+        const coincideProducto = (c.detalles || []).some(
+          (d) =>
+            (d.nombre_producto ?? '').toLowerCase().includes(q) ||
+            (d.codigo_barras ?? '').toLowerCase().includes(q)
+        );
+
+        if (!coincideProveedor && !coincideProducto) return false;
+      }
+
+      return true;
     });
-  }, [compras, search, filtro]);
+  }, [compras, search, filtro, filtroMarca, filtroLinea]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / porPagina));
   const paginaActual = Math.min(pagina, totalPaginas);
@@ -457,15 +499,77 @@ export const ComprasProveedor: React.FC = () => {
         </div>
 
         <div className={styles.toolbar}>
-          <div className={styles.searchBox}>
+          <div className={styles.searchBox} style={{ flex: '1 1 260px', maxWidth: 420 }}>
             <Search size={15} color="var(--color-text-placeholder)" />
             <input
               type="text"
-              placeholder="Buscar por proveedor, responsable o N° de compra..."
+              placeholder="Buscar por proveedor (nombre, NIT) o producto (nombre, código)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className={styles.iconBtn}
+                title="Limpiar texto de búsqueda"
+                style={{ padding: 2, background: 'none', border: 'none' }}
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <select
+              className={styles.select}
+              style={{
+                width: 'auto',
+                minWidth: 150,
+                padding: '7px 28px 7px 10px',
+                fontSize: 12,
+                height: 36,
+                borderColor: filtroMarca ? 'var(--color-primary)' : undefined,
+                background: filtroMarca ? 'var(--color-primary-light)' : undefined,
+                fontWeight: filtroMarca ? 600 : 400,
+              }}
+              value={filtroMarca}
+              onChange={(e) => setFiltroMarca(e.target.value)}
+              title="Filtrar por marca"
+            >
+              <option value="">Todas las marcas</option>
+              {marcas.map((m) => (
+                <option key={m.id_marca ?? m.nombre_marca} value={m.nombre_marca}>
+                  {m.nombre_marca}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className={styles.select}
+              style={{
+                width: 'auto',
+                minWidth: 150,
+                padding: '7px 28px 7px 10px',
+                fontSize: 12,
+                height: 36,
+                borderColor: filtroLinea ? 'var(--color-primary)' : undefined,
+                background: filtroLinea ? 'var(--color-primary-light)' : undefined,
+                fontWeight: filtroLinea ? 600 : 400,
+              }}
+              value={filtroLinea}
+              onChange={(e) => setFiltroLinea(e.target.value)}
+              title="Filtrar por línea"
+            >
+              <option value="">Todas las líneas</option>
+              {lineas.map((l) => (
+                <option key={l.id_linea ?? l.nombre_linea} value={l.nombre_linea}>
+                  {l.nombre_linea}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className={styles.filters}>
             <button
               type="button"
@@ -488,6 +592,22 @@ export const ComprasProveedor: React.FC = () => {
             >
               Anuladas
             </button>
+            {(search || filtroMarca || filtroLinea || filtro !== 'all') && (
+              <button
+                type="button"
+                className={styles.filterChip}
+                onClick={() => {
+                  setSearch('');
+                  setFiltroMarca('');
+                  setFiltroLinea('');
+                  setFiltro('all');
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#ef4444' }}
+                title="Limpiar todos los filtros"
+              >
+                <X size={12} /> Limpiar
+              </button>
+            )}
           </div>
         </div>
 
@@ -508,7 +628,7 @@ export const ComprasProveedor: React.FC = () => {
                 <tr>
                   <th>N°</th>
                   <th>Fecha</th>
-                  <th>Proveedor</th>
+                  <th>Proveedor / Productos</th>
                   <th>Responsable</th>
                   <th className={styles.right}>Total</th>
                   <th className={styles.center}>Estado</th>
@@ -520,7 +640,36 @@ export const ComprasProveedor: React.FC = () => {
                   <tr key={c.id_compra}>
                     <td className={styles.strong}>#{c.id_compra}</td>
                     <td className={styles.muted}>{formatearFechaHora(c.fecha_recepcion)}</td>
-                    <td>{c.razon_social_proveedor || '—'}</td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{c.razon_social_proveedor || '—'}</div>
+                      {c.nit_proveedor && (
+                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                          NIT/CI: {c.nit_proveedor}
+                        </div>
+                      )}
+                      {c.detalles && c.detalles.length > 0 && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: 'var(--color-text-secondary)',
+                            marginTop: 3,
+                            maxWidth: 280,
+                            lineHeight: 1.3,
+                          }}
+                          title={c.detalles
+                            .map((d) => `${d.nombre_producto ?? 'Item'} (${d.cantidad_recibida})`)
+                            .join(', ')}
+                        >
+                          <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                            {c.detalles.length} {c.detalles.length === 1 ? 'producto' : 'productos'}:
+                          </span>{' '}
+                          <span style={{ color: 'var(--color-text-heading)' }}>
+                            {c.detalles.slice(0, 2).map((d) => d.nombre_producto ?? 'Item').join(', ')}
+                            {c.detalles.length > 2 && ` +${c.detalles.length - 2} más`}
+                          </span>
+                        </div>
+                      )}
+                    </td>
                     <td className={styles.muted}>{c.nombre_usuario || '—'}</td>
                     <td className={`${styles.right} ${styles.money}`}>{formatearMoneda(c.total_pagado)}</td>
                     <td className={styles.center}>
@@ -747,7 +896,7 @@ export const ComprasProveedor: React.FC = () => {
                           id_producto: id,
                           precio_costo_unitario:
                             prod && (!linea.precio_costo_unitario || linea.precio_costo_unitario === '0')
-                              ? String(prod.precio)
+                              ? String(Number(prod.precio_compra) > 0 ? prod.precio_compra : prod.precio)
                               : linea.precio_costo_unitario,
                         });
                       }}
@@ -888,7 +1037,16 @@ export const ComprasProveedor: React.FC = () => {
                 <tbody>
                   {(detalle.detalles ?? []).map((d, i) => (
                     <tr key={d.id_detalle_compra ?? i}>
-                      <td className={styles.strong}>{d.nombre_producto || `Producto #${d.id_producto}`}</td>
+                      <td className={styles.strong}>
+                        <div>{d.nombre_producto || `Producto #${d.id_producto}`}</div>
+                        {(d.nombre_marca || d.nombre_linea || d.codigo_barras) && (
+                          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 2 }}>
+                            {[d.codigo_barras ? `Cód: ${d.codigo_barras}` : null, d.nombre_marca, d.nombre_linea]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </div>
+                        )}
+                      </td>
                       <td className={styles.center}>{d.cantidad_recibida}</td>
                       <td className={`${styles.right} ${styles.money}`}>
                         {formatearMoneda(d.precio_costo_unitario)}
