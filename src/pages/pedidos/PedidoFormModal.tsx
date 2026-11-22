@@ -1,6 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Loader2, Plus, Save, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ClipboardList,
+  Loader2,
+  PackageSearch,
+  Plus,
+  RotateCcw,
+  Save,
+  Search,
+  Truck,
+  X,
+} from 'lucide-react';
 import styles from '../../styles/crud.module.css';
+import modalStyles from './PedidoFormModal.module.css';
 import { Modal } from '../../components/Modal/Modal';
 import { SelectorComprobante } from '../../components/SelectorComprobante/SelectorComprobante';
 import {
@@ -36,6 +48,8 @@ interface FormState {
   comprobante_url: string;
   detalles: LineaForm[];
 }
+
+type ModoBusquedaPedido = 'proveedor' | 'producto';
 
 const LINEA_VACIA: LineaForm = {
   id_producto: '',
@@ -86,6 +100,47 @@ const subtotalLinea = (linea: LineaForm): number => {
   return cantidad * precio * (1 - desc / 100);
 };
 
+export const esBajoStock = (producto: Producto): boolean =>
+  Number(producto.stock_actual) <= Number(producto.stock_minimo);
+
+/**
+ * Ordena los productos dejando los de bajo stock (stock_actual <= stock_minimo) arriba,
+ * ordenados de menor a mayor stock_actual para priorizar reposición urgente.
+ */
+export const ordenarProductosPorStock = (lista: Producto[]): Producto[] =>
+  [...lista].sort((a, b) => {
+    const bajoA = esBajoStock(a) ? 0 : 1;
+    const bajoB = esBajoStock(b) ? 0 : 1;
+    if (bajoA !== bajoB) return bajoA - bajoB;
+
+    const diffStock = Number(a.stock_actual) - Number(b.stock_actual);
+    if (diffStock !== 0) return diffStock;
+
+    return a.nombre_producto.localeCompare(b.nombre_producto, 'es');
+  });
+
+export const productoPerteneceAProveedor = (
+  producto: Producto,
+  proveedor: Proveedor,
+): boolean => {
+  const marcasNombres = new Set(
+    (proveedor.marcas || []).map((m) => m.trim().toLowerCase()),
+  );
+  const marcasIds = new Set(
+    (proveedor.ids_marcas || []).map((id) => Number(id)),
+  );
+  return (
+    (producto.id_marca != null && marcasIds.has(Number(producto.id_marca))) ||
+    (producto.nombre_marca != null &&
+      marcasNombres.has(producto.nombre_marca.trim().toLowerCase()))
+  );
+};
+
+export const obtenerProveedoresDeProducto = (
+  producto: Producto,
+  proveedores: Proveedor[],
+): Proveedor[] => proveedores.filter((prov) => productoPerteneceAProveedor(producto, prov));
+
 export interface PedidoFormModalProps {
   open: boolean;
   editando: PedidoProveedor | null;
@@ -99,6 +154,7 @@ export interface PedidoFormModalProps {
 
 /**
  * Modal de creación y edición de pedidos a proveedor.
+ * Soporta búsqueda por proveedor o búsqueda directa por producto ordenada por bajo stock.
  */
 export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
   open,
@@ -112,6 +168,9 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
 }) => {
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [saving, setSaving] = useState(false);
+  const [modoBusqueda, setModoBusqueda] = useState<ModoBusquedaPedido>('proveedor');
+  const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [soloBajoStock, setSoloBajoStock] = useState(false);
 
   const fechaMinimaEntrega = useMemo(() => obtenerFechaMinimaEntrega(1), []);
 
@@ -136,6 +195,9 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
         detalles: [{ ...LINEA_VACIA }],
       });
     }
+    setModoBusqueda('proveedor');
+    setBusquedaProducto('');
+    setSoloBajoStock(false);
     setSaving(false);
   }, [open, editando, usuarios]);
 
@@ -151,22 +213,52 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
 
   const productosProveedor = useMemo(() => {
     if (!proveedorSeleccionado) return [];
-
-    const marcasNombres = new Set(
-      (proveedorSeleccionado.marcas || []).map((m) => m.trim().toLowerCase()),
+    return ordenarProductosPorStock(
+      productos.filter((prod) => productoPerteneceAProveedor(prod, proveedorSeleccionado)),
     );
-    const marcasIds = new Set(
-      (proveedorSeleccionado.ids_marcas || []).map((id) => Number(id)),
-    );
+  }, [proveedorSeleccionado, productos]);
 
-    return productos.filter((prod) => {
+  const productosOrdenados = useMemo(
+    () => ordenarProductosPorStock(productos),
+    [productos],
+  );
+
+  const productosBuscador = useMemo(() => {
+    const q = busquedaProducto.trim().toLowerCase();
+    return productosOrdenados.filter((p) => {
+      if (soloBajoStock && !esBajoStock(p)) return false;
+      if (!q) return true;
       return (
-        (prod.id_marca != null && marcasIds.has(Number(prod.id_marca))) ||
-        (prod.nombre_marca != null &&
-          marcasNombres.has(prod.nombre_marca.trim().toLowerCase()))
+        p.nombre_producto.toLowerCase().includes(q) ||
+        (p.codigo_barras ?? '').toLowerCase().includes(q) ||
+        (p.nombre_marca ?? '').toLowerCase().includes(q) ||
+        (p.nombre_linea ?? '').toLowerCase().includes(q)
       );
     });
-  }, [proveedorSeleccionado, productos]);
+  }, [productosOrdenados, busquedaProducto, soloBajoStock]);
+
+  const totalBajoStockDisponibles = useMemo(
+    () => productosOrdenados.filter(esBajoStock).length,
+    [productosOrdenados],
+  );
+
+  // Si en modo "Por Producto" ya hay líneas con productos, calculamos qué proveedores las abastecen
+  const proveedoresCompatiblesConLineas = useMemo(() => {
+    const idsProductosEnLineas = form.detalles
+      .map((d) => d.id_producto)
+      .filter((id) => id !== '');
+    if (idsProductosEnLineas.length === 0) return null;
+
+    const prodsSeleccionados = idsProductosEnLineas
+      .map((id) => productos.find((p) => String(p.id_producto) === id))
+      .filter((p): p is Producto => p !== undefined);
+
+    if (prodsSeleccionados.length === 0) return null;
+
+    return proveedores.filter((prov) =>
+      prodsSeleccionados.every((prod) => productoPerteneceAProveedor(prod, prov)),
+    );
+  }, [form.detalles, productos, proveedores]);
 
   const cambiarProveedor = (nuevoIdProveedor: string) => {
     if (nuevoIdProveedor === form.id_proveedor) return;
@@ -194,18 +286,9 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
       );
     }
 
-    const marcasNombres = new Set((nuevoProv.marcas || []).map((m) => m.trim().toLowerCase()));
-    const marcasIds = new Set((nuevoProv.ids_marcas || []).map((id) => Number(id)));
-
     const productosValidosIds = new Set(
       productos
-        .filter((prod) => {
-          return (
-            (prod.id_marca != null && marcasIds.has(Number(prod.id_marca))) ||
-            (prod.nombre_marca != null &&
-              marcasNombres.has(prod.nombre_marca.trim().toLowerCase()))
-          );
-        })
+        .filter((prod) => productoPerteneceAProveedor(prod, nuevoProv))
         .map((p) => String(p.id_producto)),
     );
 
@@ -228,6 +311,63 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
     } else {
       setForm((prev) => ({ ...prev, id_proveedor: nuevoIdProveedor }));
     }
+  };
+
+  const agregarProductoDirecto = (prod: Producto) => {
+    if (prod.id_producto == null) return;
+    const compatibles = obtenerProveedoresDeProducto(prod, proveedores);
+    if (compatibles.length === 0) {
+      onError(
+        `El producto "${prod.nombre_producto}" no tiene un proveedor vinculado a su marca (${prod.nombre_marca ?? 'sin marca'}).`,
+      );
+      return;
+    }
+
+    if (proveedorSeleccionado && !productoPerteneceAProveedor(prod, proveedorSeleccionado)) {
+      onError(
+        `"${prod.nombre_producto}" pertenece a la marca ${prod.nombre_marca ?? 'sin marca'}, que no abastece "${proveedorSeleccionado.razon_social}". Limpia el proveedor para pedir a otro distribuidor.`,
+      );
+      return;
+    }
+
+    const idProdStr = String(prod.id_producto);
+    const precioSugerido = String(
+      Number(prod.precio_compra) > 0 ? prod.precio_compra : prod.precio,
+    );
+
+    setForm((prev) => {
+      const idProvResuelto =
+        prev.id_proveedor ||
+        (compatibles[0]?.id_proveedor != null ? String(compatibles[0].id_proveedor) : '');
+
+      const idxExistente = prev.detalles.findIndex((d) => d.id_producto === idProdStr);
+      if (idxExistente >= 0) {
+        const nuevosDetalles = prev.detalles.map((d, i) =>
+          i === idxExistente
+            ? {
+                ...d,
+                cantidad_solicitada: String((Number(d.cantidad_solicitada) || 0) + 1),
+              }
+            : d,
+        );
+        return { ...prev, id_proveedor: idProvResuelto, detalles: nuevosDetalles };
+      }
+
+      const idxVacio = prev.detalles.findIndex((d) => d.id_producto === '');
+      const nuevaLinea: LineaForm = {
+        ...LINEA_VACIA,
+        id_producto: idProdStr,
+        factor_conversion: String(obtenerFactorUnidad(prod, LINEA_VACIA.unidad_venta)),
+        precio_unitario_compra: precioSugerido,
+      };
+
+      const nuevosDetalles =
+        idxVacio >= 0
+          ? prev.detalles.map((d, i) => (i === idxVacio ? nuevaLinea : d))
+          : [...prev.detalles, nuevaLinea];
+
+      return { ...prev, id_proveedor: idProvResuelto, detalles: nuevosDetalles };
+    });
   };
 
   const actualizarLinea = (index: number, cambios: Partial<LineaForm>) =>
@@ -394,12 +534,19 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
     }
   };
 
+  const proveedoresEnSelector =
+    modoBusqueda === 'producto' &&
+    proveedoresCompatiblesConLineas &&
+    proveedoresCompatiblesConLineas.length > 0
+      ? proveedoresCompatiblesConLineas
+      : proveedores;
+
   return (
     <Modal
       open={open}
       title={editando ? `Editar Pedido #${editando.id_pedido}` : 'Nuevo Pedido a Proveedor'}
       onClose={onClose}
-      width={editando ? 520 : 900}
+      width={editando ? 520 : 940}
       footer={
         <>
           <button
@@ -474,6 +621,182 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
         </form>
       ) : (
         <form id="form-pedido" onSubmit={guardar} className={styles.formGrid} noValidate>
+          <div className={`${styles.field} ${styles.formGridFull}`}>
+            <div className={modalStyles.modeSwitch} role="tablist" aria-label="Modo de armado de pedido">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={modoBusqueda === 'proveedor'}
+                className={`${modalStyles.modeBtn} ${
+                  modoBusqueda === 'proveedor' ? modalStyles.modeBtnActive : ''
+                }`}
+                onClick={() => setModoBusqueda('proveedor')}
+              >
+                <Truck size={14} /> Por Proveedor
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={modoBusqueda === 'producto'}
+                className={`${modalStyles.modeBtn} ${
+                  modoBusqueda === 'producto' ? modalStyles.modeBtnActive : ''
+                }`}
+                onClick={() => setModoBusqueda('producto')}
+              >
+                <PackageSearch size={14} /> Por Producto (Bajo stock primero)
+              </button>
+            </div>
+          </div>
+
+          {modoBusqueda === 'producto' && (
+            <div className={`${styles.field} ${styles.formGridFull}`}>
+              <div className={modalStyles.searchPanel}>
+                <div className={modalStyles.searchBarRow}>
+                  <div className={modalStyles.searchInputWrap}>
+                    <Search size={14} color="var(--color-text-placeholder)" />
+                    <input
+                      type="text"
+                      aria-label="Buscar producto para pedir"
+                      placeholder="Buscar producto por nombre, código de barras, marca o línea..."
+                      value={busquedaProducto}
+                      onChange={(e) => setBusquedaProducto(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className={`${styles.filterChip} ${
+                      soloBajoStock ? styles.filterChipActive : ''
+                    }`}
+                    onClick={() => setSoloBajoStock((prev) => !prev)}
+                  >
+                    <AlertTriangle size={12} style={{ marginRight: '4px', verticalAlign: '-1px' }} />
+                    Solo bajo stock ({totalBajoStockDisponibles})
+                  </button>
+                </div>
+
+                {proveedorSeleccionado && (
+                  <div className={modalStyles.activeSupplierBar}>
+                    <span>
+                      <strong>Proveedor activo:</strong> {proveedorSeleccionado.razon_social} — los
+                      productos de otras marcas aparecen atenuados.
+                    </span>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => cambiarProveedor('')}
+                    >
+                      <RotateCcw size={12} /> Limpiar proveedor
+                    </button>
+                  </div>
+                )}
+
+                <div
+                  className={modalStyles.productList}
+                  role="list"
+                  aria-label="Productos disponibles por stock"
+                >
+                  {productosBuscador.length === 0 ? (
+                    <div className={modalStyles.emptyResults}>
+                      No se encontraron productos que coincidan con la búsqueda.
+                    </div>
+                  ) : (
+                    productosBuscador.map((p) => {
+                      const stock = Number(p.stock_actual);
+                      const minimo = Number(p.stock_minimo);
+                      const agotado = stock === 0;
+                      const bajo = esBajoStock(p);
+                      const compatibles = obtenerProveedoresDeProducto(p, proveedores);
+                      const compatibleConActivo =
+                        !proveedorSeleccionado ||
+                        productoPerteneceAProveedor(p, proveedorSeleccionado);
+                      const lineaExistente = form.detalles.find(
+                        (d) => d.id_producto === String(p.id_producto),
+                      );
+                      const sinProveedor = compatibles.length === 0;
+                      const deshabilitado = sinProveedor || !compatibleConActivo;
+
+                      return (
+                        <div
+                          key={p.id_producto}
+                          role="listitem"
+                          className={`${modalStyles.productItem} ${
+                            deshabilitado ? modalStyles.productItemDimmed : ''
+                          }`}
+                        >
+                          <div className={modalStyles.productInfo}>
+                            <div className={modalStyles.productTitleRow}>
+                              <span className={modalStyles.productName}>{p.nombre_producto}</span>
+                              <span
+                                className={`${modalStyles.stockBadge} ${
+                                  agotado
+                                    ? modalStyles.stockOut
+                                    : bajo
+                                      ? modalStyles.stockLow
+                                      : modalStyles.stockOk
+                                }`}
+                              >
+                                {agotado
+                                  ? 'Agotado (0 u.)'
+                                  : bajo
+                                    ? `Bajo stock: ${stock} / mín ${minimo}`
+                                    : `Stock: ${stock} u.`}
+                              </span>
+                            </div>
+                            <div className={modalStyles.productMeta}>
+                              <span>
+                                {p.nombre_marca ? `Marca: ${p.nombre_marca}` : 'Sin marca'}
+                                {p.nombre_linea ? ` · ${p.nombre_linea}` : ''}
+                              </span>
+                              <span>
+                                Ref. compra:{' '}
+                                {formatearMoneda(
+                                  Number(p.precio_compra) > 0 ? p.precio_compra : p.precio,
+                                )}
+                              </span>
+                              <span>
+                                {sinProveedor
+                                  ? 'Sin proveedor asociado'
+                                  : !compatibleConActivo
+                                    ? 'Otro proveedor'
+                                    : compatibles.length === 1
+                                      ? `Proveedor: ${compatibles[0].razon_social}`
+                                      : `${compatibles.length} proveedores: ${compatibles
+                                          .map((c) => c.razon_social)
+                                          .join(', ')}`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={modalStyles.productActions}>
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${
+                                lineaExistente ? styles.btnGhost : styles.btnPrimary
+                              } ${styles.btnSm}`}
+                              onClick={() => agregarProductoDirecto(p)}
+                              disabled={deshabilitado}
+                              title={
+                                sinProveedor
+                                  ? 'Configura un proveedor para esta marca primero'
+                                  : !compatibleConActivo
+                                    ? 'Pertenece a otro proveedor; limpia el proveedor activo para pedirlo'
+                                    : 'Agregar al pedido'
+                              }
+                            >
+                              <Plus size={13} />
+                              {lineaExistente
+                                ? `Sumar (+1 · ${lineaExistente.cantidad_solicitada})`
+                                : 'Agregar'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="pedido-proveedor">
               Proveedor <span className={styles.requiredMark}>*</span>
@@ -485,7 +808,7 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
               onChange={(e) => cambiarProveedor(e.target.value)}
             >
               <option value="">Seleccionar proveedor</option>
-              {proveedores.map((p) => (
+              {proveedoresEnSelector.map((p) => (
                 <option key={p.id_proveedor} value={p.id_proveedor}>
                   {p.razon_social}
                 </option>
@@ -507,6 +830,10 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
                   <span>
                     <strong>Marcas abastecidas:</strong> {proveedorSeleccionado.marcas.join(', ')} (
                     {productosProveedor.length} productos disponibles)
+                    {modoBusqueda === 'producto' &&
+                      proveedoresCompatiblesConLineas &&
+                      proveedoresCompatiblesConLineas.length > 1 &&
+                      ` · ${proveedoresCompatiblesConLineas.length} proveedores compatibles`}
                   </span>
                 )}
               </div>
@@ -653,8 +980,8 @@ export const PedidoFormModal: React.FC<PedidoFormModalProps> = ({
                     {productosProveedor.map((p) => (
                       <option key={p.id_producto} value={p.id_producto}>
                         {p.nombre_producto}
-                        {p.nombre_marca ? ` (Marca: ${p.nombre_marca})` : ''}
-                        {p.nombre_linea ? ` [${p.nombre_linea}]` : ''}
+                        {p.nombre_marca ? ` (${p.nombre_marca})` : ''}
+                        {` — Stock: ${p.stock_actual}/${p.stock_minimo}`}
                       </option>
                     ))}
                   </select>
