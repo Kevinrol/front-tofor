@@ -8,6 +8,7 @@ import { Ventas } from '../pages/ventas/Ventas';
 import { ComprasProveedor } from '../pages/compras/ComprasProveedor';
 import { PedidosProveedor } from '../pages/pedidos/PedidosProveedor';
 import { Vendedores } from '../pages/vendedores/Vendedores';
+import { Reportes } from '../pages/reportes/Reportes';
 import { useContextoAuth } from '../context/ContextoAuth';
 import styles from '../pages/Dashboard/Panel.module.css';
 
@@ -45,6 +46,8 @@ export const LayoutPrincipal: React.FC = () => {
         return <Proveedores />;
       case 'sellers':
         return <Vendedores />;
+      case 'reports':
+        return <Reportes />;
       default:
         return (
           <main style={{ padding: '32px', color: 'var(--color-text-secondary)', fontSize: '15px' }}>

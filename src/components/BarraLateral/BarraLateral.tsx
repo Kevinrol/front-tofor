@@ -8,6 +8,7 @@ import {
   UserCheck,
   LogOut,
   Truck,
+  BarChart3,
 } from 'lucide-react';
 import { useContextoAuth } from '../../context/ContextoAuth';
 import styles from './BarraLateral.module.css';
@@ -20,7 +21,8 @@ export type NavTab =
   | 'orders'
   | 'clients'
   | 'suppliers'
-  | 'sellers';
+  | 'sellers'
+  | 'reports';
 
 interface NavOption {
   id: NavTab;
@@ -45,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     { id: 'clients', label: 'Clientes', shortLabel: 'Clientes', icon: <Users size={20} /> },
     { id: 'suppliers', label: 'Proveedores', shortLabel: 'Proveed.', icon: <Truck size={20} /> },
     { id: 'sellers', label: 'Vendedores / Personal', shortLabel: 'Personal', icon: <UserCheck size={20} /> },
+    { id: 'reports', label: 'Reportes', shortLabel: 'Reportes', icon: <BarChart3 size={20} /> },
   ];
 
   // SUPER_ADMIN y ADMIN ven todas las vistas; VENDEDOR solo ve Ventas Mostrador

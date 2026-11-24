@@ -1,0 +1,287 @@
+.tabsBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  box-shadow: var(--shadow-card);
+  flex-wrap: wrap;
+}
+
+.tabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: transparent;
+  transition: var(--transition-fast);
+}
+
+.tabBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-heading);
+}
+
+.tabBtnActive {
+  background: var(--color-primary);
+  color: var(--color-white);
+  box-shadow: 0 2px 6px rgba(var(--color-primary-rgb), 0.28);
+}
+
+.tabBtnActive:hover {
+  background: var(--color-primary-hover);
+  color: var(--color-white);
+}
+
+.filtrosCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.filtroGrupo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 155px;
+  flex: 1 1 160px;
+  max-width: 220px;
+}
+
+.filtroLabel {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.filtroControl {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-text-heading);
+  font-size: 13.5px;
+  outline: none;
+  transition: var(--transition-fast);
+}
+
+.filtroControl:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.12);
+}
+
+.filtrosAcciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.resumenGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.miniCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.miniCardTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.miniList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.miniRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--color-border-light);
+}
+
+.miniRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.miniRowLabel {
+  color: var(--color-text-body);
+  font-weight: 500;
+}
+
+.miniRowMeta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-left: 6px;
+}
+
+.miniRowValue {
+  font-weight: 700;
+  color: var(--color-text-heading);
+  white-space: nowrap;
+}
+
+.subTabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subTabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+
+.subTabBtn:hover {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-heading);
+}
+
+.subTabBtnActive {
+  background: var(--color-text-heading);
+  color: var(--color-white);
+  border-color: var(--color-text-heading);
+}
+
+.subTabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.subTabBtnActive .subTabCount {
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--color-white);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pillOk {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pillWarn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.pillDanger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.pillInfo {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.pillNeutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.exportGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btnExcel {
+  background: #15803d;
+  color: var(--color-white);
+}
+
+.btnExcel:hover:not(:disabled) {
+  background: #166534;
+}
+
+.btnPdf {
+  background: #b91c1c;
+  color: var(--color-white);
+}
+
+.btnPdf:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.emptyState {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.alignRight {
+  text-align: right;
+}
+
+.alignCenter {
+  text-align: center;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+}
